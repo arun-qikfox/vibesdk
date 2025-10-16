@@ -48,3 +48,6 @@ debug-tools/*.json
 # Sentry Config File
 .env.sentry-build-plugin
 data-dump
+
+infra/gcp/.terraform*
+infra/gcp/.terraform/*
