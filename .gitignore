@@ -50,4 +50,3 @@ debug-tools/*.json
 data-dump
 
 infra/gcp/.terraform*
-infra/gcp/.terraform/*

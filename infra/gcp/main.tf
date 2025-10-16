@@ -18,3 +18,27 @@ module "iam" {
   project_id        = local.project_id
   service_accounts  = var.service_accounts
 }
+
+module "artifact_registry" {
+  source                     = "./modules/artifact_registry"
+  project_id                 = local.project_id
+  region                     = local.region
+  repositories               = var.artifact_registry_repositories
+  ci_service_account_email   = module.iam.ci_service_account_email
+}
+
+module "cloud_build" {
+  source                    = "./modules/cloud_build"
+  project_id                = local.project_id
+  ci_service_account_email  = module.iam.ci_service_account_email
+  create_workerd_trigger    = var.create_workerd_trigger
+  github_owner              = var.github_owner
+  github_repo               = var.github_repo
+  github_branch             = var.github_branch
+}
+
+module "secrets" {
+  source   = "./modules/secrets"
+  project_id = local.project_id
+  secrets    = var.secret_placeholders
+}

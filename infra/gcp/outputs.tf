@@ -16,3 +16,35 @@ output "service_accounts" {
   value       = var.service_accounts
 }
 
+output "service_account_emails" {
+  description = "Emails of the managed service accounts (runtime, ci, dev)."
+  value = {
+    runtime = module.iam.runtime_service_account_email
+    ci      = module.iam.ci_service_account_email
+    dev     = module.iam.dev_service_account_email
+  }
+}
+
+output "networking" {
+  description = "Networking artifacts (VPC ID, subnets, serverless connector)."
+  value = {
+    vpc_id             = module.networking.vpc_id
+    private_subnet     = module.networking.private_subnet
+    public_subnet      = module.networking.public_subnet
+    serverless_connector = module.networking.serverless_connector
+  }
+}
+
+output "artifact_registry_repositories" {
+  description = "Artifact Registry repositories created for VibSDK."
+  value       = module.artifact_registry.repositories
+}
+
+output "cloud_build_workerd_trigger_id" {
+  description = "Cloud Build trigger ID for the workerd image (null if disabled)."
+  value       = module.cloud_build.workerd_trigger_id
+}
+output "secret_manager_ids" {
+  description = "Secret Manager resource names for seeded placeholders."
+  value       = module.secrets.secret_ids
+}

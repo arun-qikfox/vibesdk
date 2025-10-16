@@ -34,3 +34,45 @@ variable "vpc_cidr" {
   default     = "10.20.0.0/16"
 }
 
+variable "artifact_registry_repositories" {
+  description = "List of Artifact Registry repositories to create."
+  type        = list(string)
+  default     = ["vibesdk", "vibesdk-apps"]
+}
+
+variable "create_workerd_trigger" {
+  description = "Set to true to create the Cloud Build trigger for the workerd runtime image."
+  type        = bool
+  default     = false
+}
+
+variable "github_owner" {
+  description = "GitHub owner/organization used for Cloud Build triggers (if enabled)."
+  type        = string
+  default     = ""
+}
+
+variable "github_repo" {
+  description = "GitHub repository name used for Cloud Build triggers (if enabled)."
+  type        = string
+  default     = ""
+}
+
+variable "github_branch" {
+  description = "Branch regex for Cloud Build triggers (if enabled)."
+  type        = string
+  default     = "^main$"
+}
+
+variable "secret_placeholders" {
+  description = "Map of Secret Manager secrets to seed with placeholders (update values manually later)."
+  type        = map(string)
+  default = {
+    GOOGLE_AI_STUDIO_API_KEY = "placeholder"
+    JWT_SECRET               = "placeholder"
+    WEBHOOK_SECRET           = "placeholder"
+    SECRETS_ENCRYPTION_KEY   = "placeholder"
+    AI_PROXY_JWT_SECRET      = "placeholder"
+  }
+}
+
