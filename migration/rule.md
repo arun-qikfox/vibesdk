@@ -13,7 +13,7 @@ Use this rule file to coordinate the Google Cloud migration. An LLM or human ope
 
 | Step | File | Summary | Status | Owner | Last Update | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `migration/01-gcp-landing-zone.md` | Create project, IAM, networking, Terraform skeleton, Artifact Registry, and secret placeholders. | in-progress | Codex/user | <!-- YYYY-MM-DD --> | Initiated per latest session; update with details as tasks complete. |
+| 1 | `migration/01-gcp-landing-zone.md` | Create project, IAM, networking, Terraform skeleton, Artifact Registry, and secret placeholders. | in-progress | Codex/user | 2025-05-31 | Project `qik-vibe` ready; Terraform skeleton + networking module planned; IAM module defined (service accounts & role bindings). |
 | 2 | `migration/02-runtime-platform.md` | Build Worker bundle, package with `workerd`, publish to Artifact Registry, and deploy Cloud Run control plane. | pending | - | - | - |
 | 3 | `migration/03-data-layer.md` | Map D1/KV/R2 to Cloud SQL, Firestore/Memorystore, Cloud Storage, and update adapters. | pending | - | - | - |
 | 4 | `migration/04-durable-objects-and-sandbox.md` | Reproduce Durable Object state, rate limiting, and sandbox flows using Firestore, Redis, Cloud Run Jobs. | pending | - | - | - |
