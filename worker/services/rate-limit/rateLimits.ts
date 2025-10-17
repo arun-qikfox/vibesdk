@@ -7,6 +7,7 @@ import { KVRateLimitStore } from './KVRateLimitStore';
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 import { isDev } from 'worker/utils/envs';
 import { AIModels } from 'worker/agents/inferutils/config.types';
+import { createKVProvider } from 'shared/platform/kv';
 
 export class RateLimitService {
     static logger = createObjectLogger(this, 'RateLimitService');
@@ -97,7 +98,8 @@ export class RateLimitService {
                 break;
             }
             case RateLimitStore.KV: {
-                const result = await KVRateLimitStore.increment(env.VibecoderStore, key, rateLimitConfig as KVRateLimitConfig, incrementBy);
+                const kv = createKVProvider(env);
+                const result = await KVRateLimitStore.increment(kv, key, rateLimitConfig as KVRateLimitConfig, incrementBy);
                 success = result.success;
                 break;
             }

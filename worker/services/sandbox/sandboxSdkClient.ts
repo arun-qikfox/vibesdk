@@ -50,6 +50,7 @@ import { GitHubService } from '../github/GitHubService';
 import { getPreviewDomain } from '../../utils/urls';
 import { isDev } from 'worker/utils/envs';
 import { FileOutputType } from 'worker/agents/schemas';
+import { createKVProvider } from 'shared/platform/kv';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
 
@@ -865,7 +866,8 @@ export class SandboxSdkClient extends BaseSandboxService {
             try {
                 const wranglerConfigFile = await sandbox.readFile(`${instanceId}/wrangler.jsonc`);
                 if (wranglerConfigFile.success) {
-                    await env.VibecoderStore.put(this.getWranglerKVKey(instanceId), wranglerConfigFile.content);
+                    const kv = createKVProvider(env);
+                    await kv.put(this.getWranglerKVKey(instanceId), wranglerConfigFile.content);
                     this.logger.info('Wrangler configuration stored in KV', { instanceId });
                 } else {
                     this.logger.warn('Could not read wrangler.jsonc for KV storage', { instanceId });
@@ -1836,7 +1838,8 @@ export class SandboxSdkClient extends BaseSandboxService {
             
             // Step 2: Parse wrangler config from KV
             this.logger.info('Reading wrangler configuration from KV');
-            let wranglerConfigContent = await env.VibecoderStore.get(this.getWranglerKVKey(instanceId));
+            const kv = createKVProvider(env);
+            let wranglerConfigContent = await kv.get<string>(this.getWranglerKVKey(instanceId));
             
             if (!wranglerConfigContent) {
                 // This should never happen unless KV itself has some issues

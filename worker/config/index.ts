@@ -1,5 +1,6 @@
 import { ConfigurableSecuritySettings, getConfigurableSecurityDefaults } from "./security";
 import { createLogger } from "../logger";
+import { createKVProvider } from 'shared/platform/kv';
 
 const logger = createLogger('GlobalConfigurableSettings');
 
@@ -107,7 +108,8 @@ export async function getGlobalConfigurableSettings(env: Env): Promise<GlobalCon
     
     try {
         // Try to fetch override config from KV
-        const storedConfigJson = await env.VibecoderStore.get(CONFIG_KEY);
+        const kv = createKVProvider(env);
+        const storedConfigJson = await kv.get<string>(CONFIG_KEY);
         
         if (!storedConfigJson) {
             // No stored config, use defaults
@@ -144,7 +146,8 @@ export async function getUserConfigurableSettings(env: Env, userId: string): Pro
     }
     try {
         // Try to fetch override config from KV
-        const storedConfigJson = await env.VibecoderStore.get(`user_config:${userId}`);
+        const kv = createKVProvider(env);
+        const storedConfigJson = await kv.get<string>(`user_config:${userId}`);
         
         if (!storedConfigJson) {
             // No stored config, use defaults

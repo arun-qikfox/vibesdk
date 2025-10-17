@@ -9,30 +9,28 @@ This plan prioritizes code changes so the application can run directly against G
 - Each phase should be mergeable on its own, with unit/integration tests where possible.
 
 ## Phase 0 – Prerequisites
-- [ ] Confirm local dev environment can run all tests (`npm test`, `bun run lint` etc.).
-- [ ] Create feature branch `feat/gcp-code-first`.
-- [ ] Add `.env.gcp.example` with placeholders for upcoming env variables (GCP project, region, DB URL, etc.).
+- [x] Confirm local dev environment can run builds/tests (`npm install`, `npm run build`).
+- [x] Add `.env.gcp.example` with placeholders for GCP settings.
+- [ ] Create feature branch `feat/gcp-code-first` (optional if covered by git workflow).
 
 ## Phase 1 – Runtime Provider Abstraction
-- [ ] Introduce `shared/platform/runtimeProvider.ts` with helper functions (`isCloudflare()`, `isGcp()`).
-- [ ] Update `worker/index.ts`, `worker/app.ts`, setup scripts, and any env-dependent modules to use the helper rather than directly reading Cloudflare bindings.
+- [x] Introduce `shared/platform/runtimeProvider.ts` with helper functions (`getRuntimeProvider`, `isCloudflareRuntime`, `isGcpRuntime`).
+- [x] Update `worker/index.ts`, `worker/app.ts`, setup script, and types to read runtime provider through the helper.
 - [ ] Add unit tests confirming the provider detection logic.
 
 ## Phase 2 – Database Adapter
-- [ ] Create `worker/database/clients` containing:
-  - `cloudflareD1Client.ts` (current behaviour).
-  - `postgresClient.ts` using `drizzle-orm/postgres-js`.
-  - `createDatabaseClient(env)` factory the rest of the code calls.
-- [ ] Refactor `worker/database/database.ts` and all services to consume the factory.
-- [ ] Add configuration entries for `DATABASE_URL`, `DATABASE_AUTH_TOKEN` (if needed).
-- [ ] Write integration tests using an in-memory Postgres (e.g., `pg-mem`) or test container.
+- [x] Create `worker/database/clients` containing:
+  - `cloudflareD1Client.ts` (current behaviour with Sentry instrumentation).
+  - `postgresClient.ts` stub (guards unimplemented path).
+  - `createDatabaseClient(env)` factory used by the rest of the code.
+- [x] Refactor `worker/database/database.ts` and dependent services to consume the factory.
+- [ ] Add integration/unit tests (e.g., with pg-mem) and configuration entries for Postgres connection when implemented.
 
 ## Phase 3 – KV / Cache / Rate Limit Providers
-- [ ] Define `shared/platform/kv/kvProvider.ts` interface (`get`, `put`, `delete`, `list`).
-- [ ] Implement `cloudflareKvProvider` (wrap existing `env.VibecoderStore`).
-- [ ] Stub `gcpFirestoreProvider` initially (with TODO comments); return mock to satisfy TypeScript.
-- [ ] Update call sites (`worker/config/index.ts`, `worker/services/rate-limit/rateLimits.ts`, `worker/services/cache/KVCache.ts`) to use the provider.
-- [ ] Add unit tests covering rate limit behaviour via the provider.
+- [x] Define `shared/platform/kv` interfaces and provider factory (`get`, `put`, `delete`, `list`).
+- [x] Implement Cloudflare adapter and GCP stub (placeholder throwing until Firestore integration lands).
+- [x] Update call sites (`worker/config/index.ts`, `worker/services/rate-limit/rateLimits.ts`, `worker/services/cache/KVCache.ts`, sandbox KV usage) to use the provider.
+- [ ] Add unit tests covering rate-limit and cache behaviour via the provider abstraction.
 
 ## Phase 4 – Object Storage Adapter
 - [ ] Create `shared/platform/storage/objectStore.ts` interface (`getObject`, `putObject`, `deleteObject`).
@@ -71,4 +69,3 @@ Once stubs are in place and tests pass:
 - Proceed with Terraform apply when ready, then follow the main migration plan for deploying services.
 
 Keep this plan in sync with progress: mark completed tasks, note blockers, and cross-reference with `migration/rule.md` milestones.
-
