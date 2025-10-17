@@ -14,6 +14,16 @@ export interface UploadTemplatesOptions {
  * Currently delegates to the existing deploy_templates.sh script for Cloudflare R2.
  * TODO: replace with direct adapter calls and add GCP support.
  */
+let execImpl = execSync;
+
+export function setExecSyncImplementation(fn: typeof execSync) {
+    execImpl = fn;
+}
+
+export function resetExecSyncImplementation() {
+    execImpl = execSync;
+}
+
 export function uploadTemplatesDirectory(options: UploadTemplatesOptions) {
     const { templatesDir, bucketName, accountId, apiToken, localMode } = options;
 
@@ -28,7 +38,7 @@ export function uploadTemplatesDirectory(options: UploadTemplatesOptions) {
         LOCAL_R2: localMode ? 'true' : 'false',
     };
 
-    execSync('./deploy_templates.sh', {
+    execImpl('./deploy_templates.sh', {
         stdio: 'inherit',
         cwd: templatesDir,
         env,

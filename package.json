@@ -29,7 +29,8 @@
 		"knip:fix": "knip --fix",
 		"knip:production": "knip --production",
 		"knip:dependencies": "knip --dependencies",
-		"knip:exports": "knip --exports"
+		"knip:exports": "knip --exports",
+		"test:platform": "vitest run --config vitest.platform.config.ts"
 	},
 	"dependencies": {
 		"@cloudflare/containers": "^0.0.28",

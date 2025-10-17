@@ -323,14 +323,32 @@ class SetupManager {
 
 		const finalDomain = customDomain || 'localhost:5173';
 
+		console.log('
+☁️  Runtime Provider & GCP Configuration');
+		const runtimeDefault = (this.existingConfig.RUNTIME_PROVIDER || 'cloudflare').toLowerCase();
+		const runtimeInput = await this.promptWithDefault('Default runtime provider (cloudflare/gcp): ', runtimeDefault);
+		const normalizedRuntime = runtimeInput.trim().toLowerCase() === 'gcp' ? 'gcp' : 'cloudflare';
+		const devVars: Record<string, string> = {};
+		devVars.RUNTIME_PROVIDER = normalizedRuntime;
+
+		const projectDefault = this.existingConfig.GCP_PROJECT_ID || '';
+		const gcpProjectId = await this.promptWithDefault('Enter your GCP project ID (optional): ', projectDefault);
+		if (gcpProjectId) {
+			devVars.GCP_PROJECT_ID = gcpProjectId.trim();
+		}
+
+		const regionDefault = this.existingConfig.GCP_REGION || 'us-central1';
+		const gcpRegionInput = await this.promptWithDefault('Enter your GCP region (default us-central1): ', regionDefault);
+		if (gcpRegionInput) {
+			devVars.GCP_REGION = gcpRegionInput.trim();
+		}
+
 		// AI Gateway configuration
 		console.log('\n🤖 AI Gateway Configuration');
 		const useAIGatewayChoice = await this.prompt('Use Cloudflare AI Gateway? [STRONGLY RECOMMENDED for developer experience] (Y/n): ');
 		const useAIGateway = useAIGatewayChoice.toLowerCase() !== 'n';
 
 		let aiGatewayUrl: string | undefined;
-		const devVars: Record<string, string> = {};
-		devVars.RUNTIME_PROVIDER = this.existingConfig.RUNTIME_PROVIDER || 'cloudflare';
 		const providedProviders: string[] = [];
 		let customProviderKeys: Array<{key: string, provider: string}> = [];
 

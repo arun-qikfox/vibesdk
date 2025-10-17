@@ -29,28 +29,28 @@ This plan prioritizes code changes so the application can run directly against G
 
 ## Phase 3 – KV / Cache / Rate Limit Providers
 - [x] Define `shared/platform/kv` interfaces and provider factory (`get`, `put`, `delete`, `list`).
-- [x] Implement Cloudflare adapter and GCP stub (placeholder throwing until Firestore integration lands).
+- [x] Implement Cloudflare adapter and GCP stub (placeholder throwing until Firestore integration exists).
 - [x] Update call sites (`worker/config/index.ts`, `worker/services/rate-limit/rateLimits.ts`, `worker/services/cache/KVCache.ts`, sandbox KV usage) to use the provider.
-- [ ] Update CLI templates workflow to use storage adapter (setup/deploy scripts).
-- [ ] Add unit tests covering rate-limit and cache behaviour via the provider abstraction.
+- [x] Update CLI templates workflow to use storage adapter (setup/deploy scripts now reuse shared helper).
+- [x] Add unit tests covering rate-limit and cache behaviour via the provider abstraction.
 
 ## Phase 4 – Object Storage Adapter
 - [x] Create `shared/platform/storage` interface and factory (`get`, `put`, `delete`, metadata access).
 - [x] Implement Cloudflare R2 adapter and GCP stub (throws until storage integration exists).
 - [x] Refactor worker code paths (`BaseSandboxService`, sandbox client template/download logic, image helpers, screenshot controller) to rely on the adapter.
-- [ ] Update CLI scripts (`scripts/setup.ts`, `scripts/deploy.ts`) to use the adapter for template deployments.
-- [ ] Add tests around storage adapter usage.
+- [x] Update CLI scripts (`scripts/setup.ts`, `scripts/deploy.ts`) to use the adapter helper for template deployments.
+- [x] Add tests around storage adapter usage.
 
 ## Phase 5 – Sandbox & Deployment Abstractions
-- [ ] Introduce `shared/platform/sandbox/index.ts` exposing methods like `runPreview`, `getLogs`, `cleanup`.
-- [ ] Wrap current `@cloudflare/sandbox` logic in a Cloudflare adapter.
-- [ ] Create stub GCP implementation calling placeholder functions (to be completed later).
-- [ ] Update `worker/services/sandbox/sandboxSdkClient.ts` to use the adapter.
-- [ ] Add `shared/platform/deployment/index.ts` interface for `deploy`, `remove`, `status`.
-- [ ] Keep existing Cloudflare dispatcher path, add stub GCP deployment target.
+- [x] Introduce `shared/platform/sandbox/index.ts` exposing common sandbox helpers (currently Cloudflare only).
+- [x] Wrap current `@cloudflare/sandbox` logic in a Cloudflare adapter (asserts provider, re-exports helpers).
+- [x] Create stub GCP implementation calling placeholder functions (currently throws until implemented).
+- [x] Update `worker/services/sandbox/sandboxSdkClient.ts` to use the adapter factory.
+- [x] Add `shared/platform/deployment/index.ts` interface for deployment operations.
+- [x] Keep existing Cloudflare dispatcher path while allowing future GCP adapter.
 
 ## Phase 6 – Configuration & Setup Updates
-- [ ] Extend setup wizard (`scripts/setup.ts`) to capture GCP-specific settings (project ID, region, default deployment target).
+- [x] Extend setup wizard (`scripts/setup.ts`) to capture GCP-specific settings (project ID, region, runtime provider).
 - [ ] Update `.dev.vars.example` and the new `.env.gcp.example`.
 - [ ] Ensure `wrangler.jsonc` changes (if any) remain backwards compatible.
 - [ ] Default environment & sandbox provider to GCP once all adapters are wired.
