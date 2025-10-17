@@ -51,9 +51,9 @@ This plan prioritizes code changes so the application can run directly against G
 
 ## Phase 6 – Configuration & Setup Updates
 - [x] Extend setup wizard (`scripts/setup.ts`) to capture GCP-specific settings (project ID, region, runtime provider).
-- [ ] Update `.dev.vars.example` and the new `.env.gcp.example`.
-- [ ] Ensure `wrangler.jsonc` changes (if any) remain backwards compatible.
-- [ ] Default environment & sandbox provider to GCP once all adapters are wired.
+- [x] Update `.dev.vars.example` and the new `.env.gcp.example`.
+- [x] Ensure `wrangler.jsonc` remains unchanged and compatible with existing Cloudflare deployments.
+- [x] Default environment & sandbox provider to GCP once adapters are wired.
 
 ## Phase 7 – Tests & Tooling
 - [ ] Create `tests/gcp/` directory with smoke tests that run against stubs (no real GCP calls yet).

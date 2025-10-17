@@ -325,7 +325,7 @@ class SetupManager {
 
 		console.log('
 ☁️  Runtime Provider & GCP Configuration');
-		const runtimeDefault = (this.existingConfig.RUNTIME_PROVIDER || 'cloudflare').toLowerCase();
+		const runtimeDefault = (this.existingConfig.RUNTIME_PROVIDER || 'gcp').toLowerCase();
 		const runtimeInput = await this.promptWithDefault('Default runtime provider (cloudflare/gcp): ', runtimeDefault);
 		const normalizedRuntime = runtimeInput.trim().toLowerCase() === 'gcp' ? 'gcp' : 'cloudflare';
 		const devVars: Record<string, string> = {};
