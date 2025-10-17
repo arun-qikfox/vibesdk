@@ -329,6 +329,7 @@ class SetupManager {
 
 		let aiGatewayUrl: string | undefined;
 		const devVars: Record<string, string> = {};
+		devVars.RUNTIME_PROVIDER = this.existingConfig.RUNTIME_PROVIDER || 'cloudflare';
 		const providedProviders: string[] = [];
 		let customProviderKeys: Array<{key: string, provider: string}> = [];
 

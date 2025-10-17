@@ -9,6 +9,7 @@ import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/
 import { getPreviewDomain } from './utils/urls';
 import { proxyToAiGateway } from './services/aigateway-proxy/controller';
 import { isOriginAllowed } from './config/security';
+import { getRuntimeProvider, RuntimeProvider } from 'shared/platform/runtimeProvider';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
@@ -40,10 +41,15 @@ function setOriginControl(env: Env, request: Request, currentHeaders: Headers): 
  * @param env The environment bindings.
  * @returns A Response object from the sandbox, the dispatched worker, or an error.
  */
-async function handleUserAppRequest(request: Request, env: Env): Promise<Response> {
+async function handleUserAppRequest(request: Request, env: Env, runtimeProvider: RuntimeProvider): Promise<Response> {
 	const url = new URL(request.url);
 	const { hostname } = url;
 	logger.info(`Handling user app request for: ${hostname}`);
+
+	if (runtimeProvider !== 'cloudflare') {
+		logger.warn(`Sandbox preview requested on ${runtimeProvider} runtime. Returning not implemented.`);
+		return new Response('Sandbox preview is not yet available on this runtime.', { status: 501 });
+	}
 
 	// 1. Attempt to proxy to a live development sandbox.
 	// proxyToSandbox doesn't consume the request body on a miss, so no clone is needed here.
@@ -110,7 +116,8 @@ async function handleUserAppRequest(request: Request, env: Env): Promise<Respons
  */
 const worker = {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-        logger.info(`Received request: ${request.method} ${request.url}`);
+        const runtimeProvider = getRuntimeProvider(env);
+        logger.info(`Received request: ${request.method} ${request.url} (runtime: ${runtimeProvider})`);
 		// --- Pre-flight Checks ---
 
 		// 1. Critical configuration check: Ensure custom domain is set.
@@ -167,7 +174,7 @@ const worker = {
 
 		// Route 2: User App Request (e.g., xyz.build.cloudflare.dev or test.localhost)
 		if (isSubdomainRequest) {
-			return handleUserAppRequest(request, env);
+			return handleUserAppRequest(request, env, runtimeProvider);
 		}
 
 		return new Response('Not Found', { status: 404 });

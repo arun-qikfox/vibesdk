@@ -9,13 +9,20 @@ import { CsrfService } from './services/csrf/CsrfService';
 import { SecurityError, SecurityErrorType } from 'shared/types/errors';
 import { getGlobalConfigurableSettings } from './config';
 import { AuthConfig, setAuthLevel } from './middleware/auth/routeAuth';
+import { getRuntimeProvider } from 'shared/platform/runtimeProvider';
 // import { initHonoSentry } from './observability/sentry';
 
 export function createApp(env: Env): Hono<AppEnv> {
     const app = new Hono<AppEnv>();
+    const runtimeProvider = getRuntimeProvider(env);
 
     // Observability: Sentry error reporting & context
     // initHonoSentry(app);
+
+    app.use('*', async (c, next) => {
+        c.set('runtimeProvider', runtimeProvider);
+        await next();
+    });
 
     // Apply global security middlewares (skip for WebSocket upgrades)
     app.use('*', async (c, next) => {

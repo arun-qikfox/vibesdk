@@ -1,6 +1,7 @@
 import { GlobalConfigurableSettings } from "../config";
 import { AuthRequirement } from "../middleware/auth/routeAuth";
 import { AuthUser } from "./auth-types";
+import { RuntimeProvider } from "shared/platform/runtimeProvider";
 
 
 export type AppEnv = {
@@ -10,5 +11,6 @@ export type AppEnv = {
         sessionId: string | null;
         config: GlobalConfigurableSettings;
         authLevel: AuthRequirement;
+        runtimeProvider: RuntimeProvider;
     }
 }
