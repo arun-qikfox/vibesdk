@@ -15,10 +15,16 @@ function normalizeProvider(value: unknown): RuntimeProvider {
     return 'cloudflare';
 }
 
-type EnvLike = Record<string, unknown> | undefined;
+function readProviderFromObject(source: unknown): string | undefined {
+    if (source && typeof source === 'object') {
+        const record = source as Record<string, unknown>;
+        return typeof record[PROVIDER_KEY] === 'string' ? (record[PROVIDER_KEY] as string) : undefined;
+    }
+    return undefined;
+}
 
-export function getRuntimeProvider(env?: EnvLike): RuntimeProvider {
-    const fromEnv = env && typeof env[PROVIDER_KEY] !== 'undefined' ? env[PROVIDER_KEY] : undefined;
+export function getRuntimeProvider(env?: unknown): RuntimeProvider {
+    const fromEnv = readProviderFromObject(env);
     if (fromEnv) {
         return normalizeProvider(fromEnv);
     }
@@ -33,11 +39,10 @@ export function getRuntimeProvider(env?: EnvLike): RuntimeProvider {
     return 'cloudflare';
 }
 
-export function isCloudflareRuntime(env?: EnvLike): boolean {
+export function isCloudflareRuntime(env?: unknown): boolean {
     return getRuntimeProvider(env) === 'cloudflare';
 }
 
-export function isGcpRuntime(env?: EnvLike): boolean {
+export function isGcpRuntime(env?: unknown): boolean {
     return getRuntimeProvider(env) === 'gcp';
 }
-
