@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { parse, modify, applyEdits } from 'jsonc-parser';
 import Cloudflare from 'cloudflare';
 import { createInterface } from 'readline';
+import { uploadTemplatesDirectory } from './utils/objectStore';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -1883,20 +1884,12 @@ class SetupManager {
 
 			// Deploy to local R2 first (always available)
 			console.log(`🚀 Deploying templates to local R2 bucket: ${templatesBucket.bucket_name}`);
-
-			const localDeployEnv = {
-				...process.env,
-				CLOUDFLARE_API_TOKEN: this.config.apiToken,
-				CLOUDFLARE_ACCOUNT_ID: this.config.accountId,
-				BUCKET_NAME: templatesBucket.bucket_name,
-				R2_BUCKET_NAME: templatesBucket.bucket_name,
-				LOCAL_R2: 'true',
-			};
-
-			execSync('./deploy_templates.sh', {
-				stdio: 'inherit',
-				cwd: templatesDir,
-				env: localDeployEnv,
+			uploadTemplatesDirectory({
+				templatesDir,
+				bucketName: templatesBucket.bucket_name,
+				accountId: this.config.accountId,
+				apiToken: this.config.apiToken,
+				localMode: true,
 			});
 
 			console.log('✅ Templates deployed successfully to local R2');
@@ -1905,20 +1898,13 @@ class SetupManager {
 			if (hasRemoteR2) {
 				console.log(`🚀 Deploying templates to remote R2 bucket: ${templatesBucket.bucket_name}`);
 
-				const remoteDeployEnv = {
-					...process.env,
-					CLOUDFLARE_API_TOKEN: this.config.apiToken,
-					CLOUDFLARE_ACCOUNT_ID: this.config.accountId,
-					BUCKET_NAME: templatesBucket.bucket_name,
-					R2_BUCKET_NAME: templatesBucket.bucket_name,
-					LOCAL_R2: 'false',
-				};
-
 				try {
-					execSync('./deploy_templates.sh', {
-						stdio: 'inherit',
-						cwd: templatesDir,
-						env: remoteDeployEnv,
+					uploadTemplatesDirectory({
+						templatesDir,
+						bucketName: templatesBucket.bucket_name,
+						accountId: this.config.accountId,
+						apiToken: this.config.apiToken,
+						localMode: false,
 					});
 
 					console.log('✅ Templates deployed successfully to remote R2');

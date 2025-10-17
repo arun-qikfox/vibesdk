@@ -26,17 +26,20 @@ This plan prioritizes code changes so the application can run directly against G
 - [x] Refactor `worker/database/database.ts` and dependent services to consume the factory.
 - [ ] Add integration/unit tests (e.g., with pg-mem) and configuration entries for Postgres connection when implemented.
 
+
 ## Phase 3 – KV / Cache / Rate Limit Providers
 - [x] Define `shared/platform/kv` interfaces and provider factory (`get`, `put`, `delete`, `list`).
 - [x] Implement Cloudflare adapter and GCP stub (placeholder throwing until Firestore integration lands).
 - [x] Update call sites (`worker/config/index.ts`, `worker/services/rate-limit/rateLimits.ts`, `worker/services/cache/KVCache.ts`, sandbox KV usage) to use the provider.
+- [ ] Update CLI templates workflow to use storage adapter (setup/deploy scripts).
 - [ ] Add unit tests covering rate-limit and cache behaviour via the provider abstraction.
 
 ## Phase 4 – Object Storage Adapter
 - [x] Create `shared/platform/storage` interface and factory (`get`, `put`, `delete`, metadata access).
 - [x] Implement Cloudflare R2 adapter and GCP stub (throws until storage integration exists).
 - [x] Refactor worker code paths (`BaseSandboxService`, sandbox client template/download logic, image helpers, screenshot controller) to rely on the adapter.
-- [ ] Update CLI scripts if needed (`scripts/setup.ts`, `scripts/deploy.ts`) and add tests around storage use.
+- [ ] Update CLI scripts (`scripts/setup.ts`, `scripts/deploy.ts`) to use the adapter for template deployments.
+- [ ] Add tests around storage adapter usage.
 
 ## Phase 5 – Sandbox & Deployment Abstractions
 - [ ] Introduce `shared/platform/sandbox/index.ts` exposing methods like `runPreview`, `getLogs`, `cleanup`.
@@ -50,6 +53,7 @@ This plan prioritizes code changes so the application can run directly against G
 - [ ] Extend setup wizard (`scripts/setup.ts`) to capture GCP-specific settings (project ID, region, default deployment target).
 - [ ] Update `.dev.vars.example` and the new `.env.gcp.example`.
 - [ ] Ensure `wrangler.jsonc` changes (if any) remain backwards compatible.
+- [ ] Default environment & sandbox provider to GCP once all adapters are wired.
 
 ## Phase 7 – Tests & Tooling
 - [ ] Create `tests/gcp/` directory with smoke tests that run against stubs (no real GCP calls yet).

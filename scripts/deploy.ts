@@ -19,6 +19,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parse, modify, applyEdits } from 'jsonc-parser';
 import Cloudflare from 'cloudflare';
+import { uploadTemplatesDirectory } from './utils/objectStore';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -632,19 +633,13 @@ class CloudflareDeploymentManager {
 				`🚀 Deploying templates to R2 bucket: ${templatesBucket.bucket_name}`,
 			);
 
-			const deployEnv = {
-				...process.env,
-				CLOUDFLARE_API_TOKEN: this.env.CLOUDFLARE_API_TOKEN,
-				CLOUDFLARE_ACCOUNT_ID: this.env.CLOUDFLARE_ACCOUNT_ID,
-				BUCKET_NAME: templatesBucket.bucket_name,
-				R2_BUCKET_NAME: templatesBucket.bucket_name,
-			};
-
-			execSync('./deploy_templates.sh', {
-				stdio: 'inherit',
-				cwd: templatesDir,
-				env: deployEnv,
-			});
+            uploadTemplatesDirectory({
+                templatesDir,
+                bucketName: templatesBucket.bucket_name,
+                accountId: this.env.CLOUDFLARE_ACCOUNT_ID,
+                apiToken: this.env.CLOUDFLARE_API_TOKEN,
+                localMode: false,
+            });
 
 			console.log('✅ Templates deployed successfully to R2');
 		} catch (error) {

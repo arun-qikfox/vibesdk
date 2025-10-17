@@ -1,4 +1,5 @@
-import { getSandbox, Sandbox, ExecuteResponse, parseSSEStream, LogEvent } from '@cloudflare/sandbox';
+import { getSandbox, parseSSEStream } from 'shared/platform/sandbox';
+import type { Sandbox, ExecuteResponse, LogEvent } from 'shared/platform/sandbox';
 
 import {
     TemplateDetailsResponse,
@@ -32,11 +33,7 @@ import { createObjectLogger } from '../../logger';
 import { env } from 'cloudflare:workers'
 import { BaseSandboxService } from './BaseSandboxService';
 
-import { 
-    buildDeploymentConfig, 
-    parseWranglerConfig, 
-    deployToDispatch, 
-} from '../deployer/deploy';
+import { getDeploymentAdapter } from 'shared/platform/deployment';
 import { 
     createAssetManifest 
 } from '../deployer/utils/index';
@@ -1850,7 +1847,8 @@ export class SandboxSdkClient extends BaseSandboxService {
                 this.logger.info('Using wrangler configuration from KV');
             }
             
-            const config = parseWranglerConfig(wranglerConfigContent);
+            const deployment = getDeploymentAdapter(env);
+            const config = deployment.parseWranglerConfig(wranglerConfigContent);
             
             this.logger.info('Worker configuration', { scriptName: config.name });
             this.logger.info('Worker compatibility', { compatibilityDate: config.compatibility_date });
@@ -1937,7 +1935,7 @@ export class SandboxSdkClient extends BaseSandboxService {
         
             
             // Step 6: Build deployment config using pure function
-            const deployConfig = buildDeploymentConfig(
+            const deployConfig = deployment.buildDeploymentConfig(
                 dispatchConfig,
                 workerContent,
                 accountId,
@@ -1950,7 +1948,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             this.logger.info('Deploying to Cloudflare');
             if ('DISPATCH_NAMESPACE' in env) {
                 this.logger.info('Using dispatch namespace', { dispatchNamespace: env.DISPATCH_NAMESPACE });
-                await deployToDispatch(
+                await deployment.deployToDispatch(
                     {
                         ...deployConfig,
                         dispatchNamespace: env.DISPATCH_NAMESPACE as string
