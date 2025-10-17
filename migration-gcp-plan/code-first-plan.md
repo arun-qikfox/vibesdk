@@ -16,7 +16,7 @@ This plan prioritizes code changes so the application can run directly against G
 ## Phase 1 – Runtime Provider Abstraction
 - [x] Introduce `shared/platform/runtimeProvider.ts` with helper functions (`getRuntimeProvider`, `isCloudflareRuntime`, `isGcpRuntime`).
 - [x] Update `worker/index.ts`, `worker/app.ts`, setup script, and types to read runtime provider through the helper.
-- [ ] Add unit tests confirming the provider detection logic.
+- [x] Add unit tests confirming the provider detection logic.
 
 ## Phase 2 – Database Adapter
 - [x] Create `worker/database/clients` containing:
@@ -24,7 +24,7 @@ This plan prioritizes code changes so the application can run directly against G
   - `postgresClient.ts` stub (guards unimplemented path).
   - `createDatabaseClient(env)` factory used by the rest of the code.
 - [x] Refactor `worker/database/database.ts` and dependent services to consume the factory.
-- [ ] Add integration/unit tests (e.g., with pg-mem) and configuration entries for Postgres connection when implemented.
+- [x] Add integration/unit tests (e.g., with pg-mem) and configuration entries for Postgres connection when implemented.
 
 
 ## Phase 3 – KV / Cache / Rate Limit Providers
@@ -56,12 +56,17 @@ This plan prioritizes code changes so the application can run directly against G
 - [x] Default environment & sandbox provider to GCP once adapters are wired.
 
 ## Phase 7 – Tests & Tooling
-- [ ] Create `tests/gcp/` directory with smoke tests that run against stubs (no real GCP calls yet).
+- [x] Create `tests/gcp/` directory with smoke tests that run against stubs (no real GCP calls yet).
 - [ ] Update CI workflows (if applicable) to run the new test suites.
-- [ ] Document how to execute the tests locally.
+- [x] Document how to execute the tests locally.
+
+### Test Execution
+- `npm run test:platform` runs the Node-based adapter, CLI, and GCP stub smoke suites.
+- `npm run test` executes the Cloudflare Worker-focused suite under Miniflare.
+- `npm run test:coverage` combines both when you want merged coverage locally.
 
 ## Phase 8 – Cleanup & Review
-- [ ] Audit for direct Cloudflare binding access; ensure code paths use adapters.
+- [x] Audit for direct Cloudflare binding access; ensure code paths use adapters.
 - [ ] Remove any temporary TODO comments once real GCP implementations land.
 - [ ] Prepare PR checklist summarizing the staged changes.
 

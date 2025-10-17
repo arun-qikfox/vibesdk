@@ -5,6 +5,7 @@ import { extractTokenWithMetadata, extractRequestMetadata } from '../../utils/au
 import { captureSecurityEvent } from '../../observability/sentry';
 import { KVRateLimitStore } from './KVRateLimitStore';
 import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
+import { isCloudflareRuntime } from 'shared/platform/runtimeProvider';
 import { isDev } from 'worker/utils/envs';
 import { AIModels } from 'worker/agents/inferutils/config.types';
 import { createKVProvider } from 'shared/platform/kv';
@@ -56,6 +57,18 @@ export class RateLimitService {
         incrementBy: number = 1
     ): Promise<boolean> {
         try {
+            if (!isCloudflareRuntime(env)) {
+                this.logger.warn('Durable Object rate limiting is not available for the current runtime provider', {
+                    key,
+                });
+                return true;
+            }
+
+            if (!env.DORateLimitStore) {
+                this.logger.warn('Durable Object rate limit store binding missing from environment', { key });
+                return true;
+            }
+
             const stub = env.DORateLimitStore.getByName(key);
 
             const result = await stub.increment(key, {
