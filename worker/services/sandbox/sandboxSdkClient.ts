@@ -51,6 +51,7 @@ import { getPreviewDomain } from '../../utils/urls';
 import { isDev } from 'worker/utils/envs';
 import { FileOutputType } from 'worker/agents/schemas';
 import { createKVProvider } from 'shared/platform/kv';
+import { createObjectStore } from 'shared/platform/storage';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
 
@@ -241,9 +242,10 @@ export class SandboxSdkClient extends BaseSandboxService {
     async downloadTemplate(templateName: string, downloadDir?: string) : Promise<ArrayBuffer> {
         // Fetch the zip file from R2
         const downloadUrl = downloadDir ? `${downloadDir}/${templateName}.zip` : `${templateName}.zip`;
-        this.logger.info(`Fetching object: ${downloadUrl} from R2 bucket`);
-        const r2Object = await env.TEMPLATES_BUCKET.get(downloadUrl);
-          
+        this.logger.info(`Fetching object: ${downloadUrl} from object store`);
+        const store = createObjectStore(env as unknown as Record<string, unknown>);
+        const r2Object = await store.get(downloadUrl);
+        
         if (!r2Object) {
             throw new Error(`Object '${downloadUrl}' not found in bucket`);
         }

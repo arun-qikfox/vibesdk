@@ -2,6 +2,7 @@ import { BaseController } from '../baseController';
 import type { ControllerResponse, ApiResponse } from '../types';
 import type { RouteContext } from '../../types/route-context';
 import { createLogger } from '../../../logger';
+import { createObjectStore } from 'shared/platform/storage';
 
 // -------------------------
 // Helpers
@@ -75,8 +76,9 @@ export class ScreenshotsController extends BaseController {
             }
 
             const key = `screenshots/${sessionId}/${validatedFile}`;
-            const obj = await env.TEMPLATES_BUCKET.get(key);
-            if (!obj || !obj.body) {
+            const store = createObjectStore(env as unknown as Record<string, unknown>);
+            const obj = await store.get(key);
+            if (!obj) {
                 return ScreenshotsController.createErrorResponse('Screenshot not found', 404);
             }
 
@@ -89,7 +91,9 @@ export class ScreenshotsController extends BaseController {
 
 			// We return a naked Response because our controller helper types expect JSON, but this route is binary.
 			// It's safe because the router uses this Response directly.
-			return new Response(obj.body, {
+			const stream = obj.stream();
+			const body = stream ?? (await obj.arrayBuffer());
+			return new Response(body, {
 				headers,
 			}) as unknown as ControllerResponse<ApiResponse<never>>;
 		        } catch (error) {

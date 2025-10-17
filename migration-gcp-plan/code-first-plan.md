@@ -33,10 +33,10 @@ This plan prioritizes code changes so the application can run directly against G
 - [ ] Add unit tests covering rate-limit and cache behaviour via the provider abstraction.
 
 ## Phase 4 – Object Storage Adapter
-- [ ] Create `shared/platform/storage/objectStore.ts` interface (`getObject`, `putObject`, `deleteObject`).
-- [ ] Implement Cloudflare R2 adapter (`cloudflareObjectStore`).
-- [ ] Add stub for `gcpStorageObjectStore`.
-- [ ] Refactor image utilities, sandbox template loading, and scripts (`scripts/setup.ts`, `scripts/deploy.ts`) to use the interface.
+- [x] Create `shared/platform/storage` interface and factory (`get`, `put`, `delete`, metadata access).
+- [x] Implement Cloudflare R2 adapter and GCP stub (throws until storage integration exists).
+- [x] Refactor worker code paths (`BaseSandboxService`, sandbox client template/download logic, image helpers, screenshot controller) to rely on the adapter.
+- [ ] Update CLI scripts if needed (`scripts/setup.ts`, `scripts/deploy.ts`) and add tests around storage use.
 
 ## Phase 5 – Sandbox & Deployment Abstractions
 - [ ] Introduce `shared/platform/sandbox/index.ts` exposing methods like `runPreview`, `getLogs`, `cleanup`.

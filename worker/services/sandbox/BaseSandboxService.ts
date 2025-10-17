@@ -34,6 +34,7 @@ import {
   import { createObjectLogger, StructuredLogger } from '../../logger';
   import { env } from 'cloudflare:workers'
 import { FileOutputType } from 'worker/agents/schemas';
+import { createObjectStore } from 'shared/platform/storage';
   /**
    * Streaming event for enhanced command execution
    */
@@ -81,12 +82,13 @@ import { FileOutputType } from 'worker/agents/schemas';
      */
     static async listTemplates(): Promise<TemplateListResponse> {
         try {
-            const response = await env.TEMPLATES_BUCKET.get('template_catalog.json');
+            const store = createObjectStore(env as unknown as Record<string, unknown>);
+            const response = await store.get('template_catalog.json');
             if (response === null) {
                 throw new Error(`Failed to fetch template catalog: Template catalog not found`);
             }
             
-            const templates = await response.json() as TemplateInfo[];
+            const templates = await response.json<TemplateInfo[]>();
 
             // For now, just filter out *next* templates
             const filteredTemplates = templates.filter(t => !t.name.includes('next'));
