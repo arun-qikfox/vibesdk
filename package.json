@@ -10,6 +10,7 @@
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
 		"deploy": "bun --env-file .prod.vars scripts/deploy.ts",
+		"build:worker": "tsx scripts/build-worker.ts",
 		"cf-typegen": "wrangler types --include-runtime false",
 		"test": "vitest run",
 		"test:watch": "vitest",

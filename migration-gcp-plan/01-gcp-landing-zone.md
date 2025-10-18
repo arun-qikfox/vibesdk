@@ -18,11 +18,11 @@ Goal: Stand up a repeatable Google Cloud foundation for VibSDK (project, IAM, ne
 ## Implementation Steps
 
 ### Step 1: Create Project and Enable APIs
-- [ ] Choose a project ID `vibesdk-gcp` (update if occupied).
+- [ ] Choose a project ID `qfxcloud-app-builder` (update if occupied).
 - [ ] Run:
   ```
-  gcloud projects create vibesdk-gcp --name="VibSDK GCP"
-  gcloud beta billing projects link vibesdk-gcp --billing-account=YOUR_BILLING_ACCOUNT
+  gcloud projects create qfxcloud-app-builder --name="QFX Cloud App Builder"
+  gcloud beta billing projects link qfxcloud-app-builder --billing-account=YOUR_BILLING_ACCOUNT
   ```
 - [ ] Enable core services:
   ```
@@ -72,7 +72,7 @@ Goal: Stand up a repeatable Google Cloud foundation for VibSDK (project, IAM, ne
 - [ ] List the required secrets from `wrangler.jsonc` (`GOOGLE_AI_STUDIO_API_KEY`, `JWT_SECRET`, etc.).
 - [ ] Create matching placeholders in Secret Manager:
   ```
-  printf "placeholder" | gcloud secrets create GOOGLE_AI_STUDIO_API_KEY --data-file=- --project=vibesdk-gcp
+  printf "placeholder" | gcloud secrets create GOOGLE_AI_STUDIO_API_KEY --data-file=- --project=qfxcloud-app-builder
   ```
 - [ ] Grant access to the runtime service account only.
 - [ ] Document secret naming convention in `infra/gcp/README.md`.
@@ -83,12 +83,11 @@ Goal: Stand up a repeatable Google Cloud foundation for VibSDK (project, IAM, ne
 - [ ] Open a draft PR (`feat/gcp-landing-zone`) capturing open questions before moving forward.
 
 ## Verification
-- [ ] `gcloud projects describe vibesdk-gcp` returns the project.
-- [ ] `gcloud artifacts repositories list --project=vibesdk-gcp` shows `vibesdk`.
-- [ ] `gcloud secrets list --project=vibesdk-gcp` lists placeholders.
+- [ ] `gcloud projects describe qfxcloud-app-builder` returns the project.
+- [ ] `gcloud artifacts repositories list --project=qfxcloud-app-builder` shows `vibesdk`.
+- [ ] `gcloud secrets list --project=qfxcloud-app-builder` lists placeholders.
 - [ ] Terraform plan runs cleanly with no resources pending (after initial apply).
 
 ## Suggested Next Steps
 - Tackle `02-runtime-platform.md` once the landing zone is stable.
 - Keep Terraform state clean; future specs will extend the same configuration.
-

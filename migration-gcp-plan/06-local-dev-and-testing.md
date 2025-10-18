@@ -19,9 +19,9 @@ Goal: Run VibSDK locally (frontend + worker dev server) while connecting to Goog
 - [ ] Prefer workload identity federation:
   ```
   gcloud auth login
-  gcloud config set project vibesdk-gcp
+  gcloud config set project qfxcloud-app-builder
   gcloud iam service-accounts add-iam-policy-binding \
-    vibesdk-dev@vibesdk-gcp.iam.gserviceaccount.com \
+    vibesdk-dev@qfxcloud-app-builder.iam.gserviceaccount.com \
     --member="user:<your-email>" \
     --role="roles/iam.serviceAccountTokenCreator"
   gcloud auth print-identity-token --audiences=https://iamcredentials.googleapis.com
@@ -32,11 +32,11 @@ Goal: Run VibSDK locally (frontend + worker dev server) while connecting to Goog
 ### Step 2: Environment Variables
 - [ ] Create `.env.gcp` at repository root containing:
   ```
-  GCP_PROJECT_ID=vibesdk-gcp
+  GCP_PROJECT_ID=qfxcloud-app-builder
   GCP_REGION=us-central1
   DEFAULT_DEPLOYMENT_TARGET=gcp-cloud-run
   DATABASE_URL=postgres://...
-  FIRESTORE_PROJECT_ID=vibesdk-gcp
+  FIRESTORE_PROJECT_ID=qfxcloud-app-builder
   GCS_TEMPLATES_BUCKET=vibesdk-templates
   SANDBOX_TOPIC=sandbox-requests
   ```
@@ -81,4 +81,3 @@ Goal: Run VibSDK locally (frontend + worker dev server) while connecting to Goog
 ## Wrap-Up
 - Once this step is complete, the migration plan is ready for full execution.
 - Update `migration/README.md` with any lessons learned or caveats for future contributors.
-

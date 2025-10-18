@@ -10,15 +10,13 @@ terraform {
     }
   }
 
-  # TODO: configure remote state (e.g., GCS bucket) before first `terraform apply`.
-  # backend "gcs" {
-  #   bucket = "vibesdk-terraform-state"
-  #   prefix = "landing-zone"
-  # }
+  backend "gcs" {
+    bucket = "qfxcloud-tf-state"
+    prefix = "landing-zone"
+  }
 }
 
 provider "google" {
   project = var.project_id
   region  = var.region
 }
-
