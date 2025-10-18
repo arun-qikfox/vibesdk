@@ -1,0 +1,26 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: Build workerd image
+    args:
+      [
+        "build",
+        "-f",
+        "container/Dockerfile.workerd",
+        "-t",
+        "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:${COMMIT_SHA}",
+        ".",
+      ]
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push workerd image
+    args:
+      [
+        "push",
+        "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:${COMMIT_SHA}",
+      ]
+
+images:
+  - "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:${COMMIT_SHA}"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
