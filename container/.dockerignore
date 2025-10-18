@@ -1,0 +1,14 @@
+node_modules
+dist/worker-bundle
+infra
+.git
+.github
+.wrangler
+*.log
+*.tsbuildinfo
+.vscode
+coverage
+tmp
+.turbo
+.cache
+.DS_Store
