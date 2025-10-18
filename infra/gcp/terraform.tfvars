@@ -1,2 +1,24 @@
 project_id = "qfxcloud-app-builder"
 region     = "us-central1"
+
+runtime_image = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:6cc658aa9a840dc295591959109b1ef6fe27c3c2"
+
+runtime_env = {
+  RUNTIME_PROVIDER        = "gcp"
+  GCP_PROJECT_ID          = "qfxcloud-app-builder"
+  GCP_REGION              = "us-central1"
+  DEFAULT_DEPLOYMENT_TARGET = "gcp-cloud-run"
+  TEMPLATES_REPOSITORY    = "https://github.com/cloudflare/vibesdk-templates"
+  DISPATCH_NAMESPACE      = "vibesdk-default-namespace"
+  ENABLE_READ_REPLICAS    = "true"
+  CLOUDFLARE_AI_GATEWAY   = "vibesdk-gateway"
+  CUSTOM_DOMAIN           = ""
+  MAX_SANDBOX_INSTANCES   = "10"
+  SANDBOX_INSTANCE_TYPE   = "standard-3"
+  USE_CLOUDFLARE_IMAGES   = "false"
+  SANDBOX_TOPIC           = "vibesdk-sandbox-requests"
+  GCS_TEMPLATES_BUCKET    = "vibesdk-templates"
+  FIRESTORE_PROJECT_ID    = "qfxcloud-app-builder"
+  AI_GATEWAY_URL          = ""
+  AI_GATEWAY_API_KEY      = ""
+}

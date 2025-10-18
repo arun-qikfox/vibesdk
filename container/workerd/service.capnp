@@ -10,7 +10,7 @@ const config :Workerd.Config = (
        compatibilityFlags = ["nodejs_compat"],
        mainModule = "main",
        modules = [
-         (name = "main", esModule = embed "../../dist/worker-bundle/index.js"),
+         (name = "main", esModule = embed "../dist/worker-bundle/index.js"),
          (name = "kvStub", esModule = embed "./stubs/kv.js"),
          (name = "d1Stub", esModule = embed "./stubs/d1.js"),
          (name = "r2Stub", esModule = embed "./stubs/r2.js"),

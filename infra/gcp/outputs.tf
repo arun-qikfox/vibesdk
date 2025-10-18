@@ -48,3 +48,12 @@ output "secret_manager_ids" {
   description = "Secret Manager resource names for seeded placeholders."
   value       = module.secrets.secret_ids
 }
+
+output "runtime_service" {
+  description = "Details of the Cloud Run control plane service."
+  value = {
+    name             = module.runtime.service_name
+    uri              = module.runtime.service_uri
+    latest_revision  = module.runtime.latest_revision
+  }
+}

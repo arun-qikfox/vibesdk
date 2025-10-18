@@ -42,3 +42,29 @@ module "secrets" {
   project_id = local.project_id
   secrets    = var.secret_placeholders
 }
+
+module "runtime" {
+  source                = "./modules/runtime"
+  project_id            = local.project_id
+  region                = local.region
+  service_name          = var.runtime_service_name
+  image                 = var.runtime_image
+  service_account_email = module.iam.runtime_service_account_email
+  vpc_connector         = module.networking.serverless_connector
+  vpc_egress            = var.runtime_vpc_egress
+  ingress               = var.runtime_ingress
+  min_instances         = var.runtime_min_instances
+  max_instances         = var.runtime_max_instances
+  env                   = var.runtime_env
+  labels                = var.runtime_labels
+  annotations           = var.runtime_annotations
+
+  secret_env = {
+    for env_var, secret_key in var.runtime_secret_bindings :
+    env_var => {
+      secret  = module.secrets.secret_ids[secret_key]
+      version = "latest"
+    }
+    if contains(keys(module.secrets.secret_ids), secret_key)
+  }
+}

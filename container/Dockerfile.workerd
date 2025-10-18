@@ -27,4 +27,4 @@ COPY container/workerd ./workerd-config
 # Expose Cloud Run port.
 ENV PORT=8080
 
-ENTRYPOINT ["/usr/local/bin/workerd", "--config", "/app/workerd-config/service.capnp", "--port", "8080"]
+ENTRYPOINT ["/usr/local/bin/workerd", "serve", "--config", "/app/workerd-config/service.capnp"]

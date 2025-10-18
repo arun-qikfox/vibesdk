@@ -11,4 +11,3 @@ Current and planned modules:
 - `agents/` - Custom agent runtime infrastructure (post-migration task 07).
 
 Each module should expose clear inputs and outputs and avoid hard-coding project IDs or regions; consume shared variables from `../../variables.tf`.
-
