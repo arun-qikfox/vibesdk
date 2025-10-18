@@ -1,4 +1,5 @@
-import { getSandbox, Sandbox, ExecuteResponse, parseSSEStream, LogEvent } from '@cloudflare/sandbox';
+import { getSandbox, parseSSEStream } from 'shared/platform/sandbox';
+import type { Sandbox, ExecuteResponse, LogEvent } from 'shared/platform/sandbox';
 
 import {
     TemplateDetailsResponse,
@@ -32,11 +33,7 @@ import { createObjectLogger } from '../../logger';
 import { env } from 'cloudflare:workers'
 import { BaseSandboxService } from './BaseSandboxService';
 
-import { 
-    buildDeploymentConfig, 
-    parseWranglerConfig, 
-    deployToDispatch, 
-} from '../deployer/deploy';
+import { getDeploymentAdapter } from 'shared/platform/deployment';
 import { 
     createAssetManifest 
 } from '../deployer/utils/index';
@@ -50,6 +47,8 @@ import { GitHubService } from '../github/GitHubService';
 import { getPreviewDomain } from '../../utils/urls';
 import { isDev } from 'worker/utils/envs';
 import { FileOutputType } from 'worker/agents/schemas';
+import { createKVProvider } from 'shared/platform/kv';
+import { createObjectStore } from 'shared/platform/storage';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
 
@@ -240,9 +239,10 @@ export class SandboxSdkClient extends BaseSandboxService {
     async downloadTemplate(templateName: string, downloadDir?: string) : Promise<ArrayBuffer> {
         // Fetch the zip file from R2
         const downloadUrl = downloadDir ? `${downloadDir}/${templateName}.zip` : `${templateName}.zip`;
-        this.logger.info(`Fetching object: ${downloadUrl} from R2 bucket`);
-        const r2Object = await env.TEMPLATES_BUCKET.get(downloadUrl);
-          
+        this.logger.info(`Fetching object: ${downloadUrl} from object store`);
+        const store = createObjectStore(env as unknown as Record<string, unknown>);
+        const r2Object = await store.get(downloadUrl);
+        
         if (!r2Object) {
             throw new Error(`Object '${downloadUrl}' not found in bucket`);
         }
@@ -865,7 +865,8 @@ export class SandboxSdkClient extends BaseSandboxService {
             try {
                 const wranglerConfigFile = await sandbox.readFile(`${instanceId}/wrangler.jsonc`);
                 if (wranglerConfigFile.success) {
-                    await env.VibecoderStore.put(this.getWranglerKVKey(instanceId), wranglerConfigFile.content);
+                    const kv = createKVProvider(env);
+                    await kv.put(this.getWranglerKVKey(instanceId), wranglerConfigFile.content);
                     this.logger.info('Wrangler configuration stored in KV', { instanceId });
                 } else {
                     this.logger.warn('Could not read wrangler.jsonc for KV storage', { instanceId });
@@ -1836,7 +1837,8 @@ export class SandboxSdkClient extends BaseSandboxService {
             
             // Step 2: Parse wrangler config from KV
             this.logger.info('Reading wrangler configuration from KV');
-            let wranglerConfigContent = await env.VibecoderStore.get(this.getWranglerKVKey(instanceId));
+            const kv = createKVProvider(env);
+            let wranglerConfigContent = await kv.get<string>(this.getWranglerKVKey(instanceId));
             
             if (!wranglerConfigContent) {
                 // This should never happen unless KV itself has some issues
@@ -1845,7 +1847,8 @@ export class SandboxSdkClient extends BaseSandboxService {
                 this.logger.info('Using wrangler configuration from KV');
             }
             
-            const config = parseWranglerConfig(wranglerConfigContent);
+            const deployment = getDeploymentAdapter(env);
+            const config = deployment.parseWranglerConfig(wranglerConfigContent);
             
             this.logger.info('Worker configuration', { scriptName: config.name });
             this.logger.info('Worker compatibility', { compatibilityDate: config.compatibility_date });
@@ -1932,7 +1935,7 @@ export class SandboxSdkClient extends BaseSandboxService {
         
             
             // Step 6: Build deployment config using pure function
-            const deployConfig = buildDeploymentConfig(
+            const deployConfig = deployment.buildDeploymentConfig(
                 dispatchConfig,
                 workerContent,
                 accountId,
@@ -1945,7 +1948,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             this.logger.info('Deploying to Cloudflare');
             if ('DISPATCH_NAMESPACE' in env) {
                 this.logger.info('Using dispatch namespace', { dispatchNamespace: env.DISPATCH_NAMESPACE });
-                await deployToDispatch(
+                await deployment.deployToDispatch(
                     {
                         ...deployConfig,
                         dispatchNamespace: env.DISPATCH_NAMESPACE as string

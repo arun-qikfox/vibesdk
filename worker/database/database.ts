@@ -3,12 +3,12 @@
  * Provides database connection, core utilities, and base operations∂ƒ
  */
 
-import { drizzle } from 'drizzle-orm/d1';
-import * as Sentry from '@sentry/cloudflare';
-import * as schema from './schema';
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
+import * as schema from './schema';
 
 import type { HealthStatusResult } from './types';
+import { createDatabaseClient, isD1DatabaseClient } from './clients';
+import type { D1DatabaseClient } from './clients/d1Client';
 
 // ========================================
 // TYPE DEFINITIONS AND INTERFACES
@@ -33,14 +33,15 @@ export type {
  */
 export class DatabaseService {
     public readonly db: DrizzleD1Database<typeof schema>;
-    private readonly d1: D1Database;
-    private readonly enableReplicas: boolean;
+    private readonly client: D1DatabaseClient;
 
     constructor(env: Env) {
-        const instrumented = Sentry.instrumentD1WithSentry(env.DB);
-        this.d1 = instrumented;
-        this.db = drizzle(instrumented, { schema });
-        this.enableReplicas = env.ENABLE_READ_REPLICAS === 'true';
+        const client = createDatabaseClient(env);
+        if (!isD1DatabaseClient(client)) {
+            throw new Error('Postgres database adapter is not yet implemented. Set RUNTIME_PROVIDER=cloudflare until the adapter is available.');
+        }
+        this.client = client;
+        this.db = this.client.getPrimary() as DrizzleD1Database<typeof schema>;
     }
 
     /**
@@ -53,15 +54,7 @@ export class DatabaseService {
      * @returns Drizzle database instance configured for read operations
      */
     public getReadDb(strategy: 'fast' | 'fresh' = 'fast'): DrizzleD1Database<typeof schema> {
-        // Return regular db if replicas are disabled
-        if (!this.enableReplicas) {
-            return this.db;
-        }
-
-        const sessionType = strategy === 'fresh' ? 'first-primary' : 'first-unconstrained';
-        const session = this.d1.withSession(sessionType);
-        // D1DatabaseSession is compatible with D1Database for Drizzle operations
-        return drizzle(session as unknown as D1Database, { schema });
+        return this.client.getReadReplica(strategy) as DrizzleD1Database<typeof schema>;
     }
 
     // ========================================

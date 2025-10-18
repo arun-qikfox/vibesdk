@@ -5,6 +5,7 @@
 
 import { ImageAttachment, ProcessedImageAttachment, SupportedImageMimeType } from "worker/types/image-attachment";
 import { getProtocolForHost } from "./urls";
+import { createObjectStore } from 'shared/platform/storage';
 
     
 export function base64ToUint8Array(base64: string): Uint8Array {
@@ -66,7 +67,11 @@ export function getPublicUrlForR2Image(env: Env, r2Key: string): string {
 export async function uploadImageToR2(env: Env, image: ImageAttachment, type: ImageType, cfImagesUrl?: string, bytes?: Uint8Array): Promise<{ url: string; r2Key: string }> {
     const data = bytes ?? base64ToUint8Array(image.base64Data!);
     const r2Key = `${type}/${image.id}/${encodeURIComponent(image.filename)}`;
-    await env.TEMPLATES_BUCKET.put(r2Key, data, { httpMetadata: { contentType: image.mimeType }, customMetadata: { "cfImagesUrl": cfImagesUrl || '' } });
+    const store = createObjectStore(env as unknown as Record<string, unknown>);
+    await store.put(r2Key, data, {
+        httpMetadata: { contentType: image.mimeType },
+        customMetadata: { cfImagesUrl: cfImagesUrl || '' },
+    });
 
     return { url: getPublicUrlForR2Image(env, r2Key), r2Key };
 }
@@ -137,12 +142,13 @@ export async function imagesToBase64(env: Env, images: ProcessedImageAttachment[
 }
 
 export async function downloadR2Image(env: Env, r2Key: string) : Promise<ProcessedImageAttachment> {
-    const response = await env.TEMPLATES_BUCKET.get(r2Key);
-    if (!response || !response.body) {
+    const store = createObjectStore(env as unknown as Record<string, unknown>);
+    const response = await store.get(r2Key);
+    if (!response) {
         throw new Error('Failed to fetch image from R2');
     }
     const arrayBuffer = await response.arrayBuffer();
-    const mimeType = response.httpMetadata!.contentType! as SupportedImageMimeType;
+    const mimeType = response.httpMetadata?.contentType as SupportedImageMimeType;
     const customMetadata = response.customMetadata;
     const cfImagesUrl = customMetadata?.cfImagesUrl;
     const base64 = Buffer.from(arrayBuffer).toString('base64');

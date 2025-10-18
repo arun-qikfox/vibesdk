@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { parse, modify, applyEdits } from 'jsonc-parser';
 import Cloudflare from 'cloudflare';
 import { createInterface } from 'readline';
+import { uploadTemplatesDirectory } from './utils/objectStore';
 
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -322,14 +323,32 @@ class SetupManager {
 
 		const finalDomain = customDomain || 'localhost:5173';
 
+		console.log('
+☁️  Runtime Provider & GCP Configuration');
+		const runtimeDefault = (this.existingConfig.RUNTIME_PROVIDER || 'gcp').toLowerCase();
+		const runtimeInput = await this.promptWithDefault('Default runtime provider (cloudflare/gcp): ', runtimeDefault);
+		const normalizedRuntime = runtimeInput.trim().toLowerCase() === 'gcp' ? 'gcp' : 'cloudflare';
+		const devVars: Record<string, string> = {};
+		devVars.RUNTIME_PROVIDER = normalizedRuntime;
+
+		const projectDefault = this.existingConfig.GCP_PROJECT_ID || '';
+		const gcpProjectId = await this.promptWithDefault('Enter your GCP project ID (optional): ', projectDefault);
+		if (gcpProjectId) {
+			devVars.GCP_PROJECT_ID = gcpProjectId.trim();
+		}
+
+		const regionDefault = this.existingConfig.GCP_REGION || 'us-central1';
+		const gcpRegionInput = await this.promptWithDefault('Enter your GCP region (default us-central1): ', regionDefault);
+		if (gcpRegionInput) {
+			devVars.GCP_REGION = gcpRegionInput.trim();
+		}
+
 		// AI Gateway configuration
 		console.log('\n🤖 AI Gateway Configuration');
 		const useAIGatewayChoice = await this.prompt('Use Cloudflare AI Gateway? [STRONGLY RECOMMENDED for developer experience] (Y/n): ');
 		const useAIGateway = useAIGatewayChoice.toLowerCase() !== 'n';
 
 		let aiGatewayUrl: string | undefined;
-		const devVars: Record<string, string> = {};
-		devVars.RUNTIME_PROVIDER = this.existingConfig.RUNTIME_PROVIDER || 'cloudflare';
 		const providedProviders: string[] = [];
 		let customProviderKeys: Array<{key: string, provider: string}> = [];
 
@@ -1883,20 +1902,12 @@ class SetupManager {
 
 			// Deploy to local R2 first (always available)
 			console.log(`🚀 Deploying templates to local R2 bucket: ${templatesBucket.bucket_name}`);
-
-			const localDeployEnv = {
-				...process.env,
-				CLOUDFLARE_API_TOKEN: this.config.apiToken,
-				CLOUDFLARE_ACCOUNT_ID: this.config.accountId,
-				BUCKET_NAME: templatesBucket.bucket_name,
-				R2_BUCKET_NAME: templatesBucket.bucket_name,
-				LOCAL_R2: 'true',
-			};
-
-			execSync('./deploy_templates.sh', {
-				stdio: 'inherit',
-				cwd: templatesDir,
-				env: localDeployEnv,
+			uploadTemplatesDirectory({
+				templatesDir,
+				bucketName: templatesBucket.bucket_name,
+				accountId: this.config.accountId,
+				apiToken: this.config.apiToken,
+				localMode: true,
 			});
 
 			console.log('✅ Templates deployed successfully to local R2');
@@ -1905,20 +1916,13 @@ class SetupManager {
 			if (hasRemoteR2) {
 				console.log(`🚀 Deploying templates to remote R2 bucket: ${templatesBucket.bucket_name}`);
 
-				const remoteDeployEnv = {
-					...process.env,
-					CLOUDFLARE_API_TOKEN: this.config.apiToken,
-					CLOUDFLARE_ACCOUNT_ID: this.config.accountId,
-					BUCKET_NAME: templatesBucket.bucket_name,
-					R2_BUCKET_NAME: templatesBucket.bucket_name,
-					LOCAL_R2: 'false',
-				};
-
 				try {
-					execSync('./deploy_templates.sh', {
-						stdio: 'inherit',
-						cwd: templatesDir,
-						env: remoteDeployEnv,
+					uploadTemplatesDirectory({
+						templatesDir,
+						bucketName: templatesBucket.bucket_name,
+						accountId: this.config.accountId,
+						apiToken: this.config.apiToken,
+						localMode: false,
 					});
 
 					console.log('✅ Templates deployed successfully to remote R2');

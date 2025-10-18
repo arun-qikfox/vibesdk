@@ -3,8 +3,10 @@ export interface KVCacheOptions {
     prefix?: string;
 }
 
+import { createKVProvider, type KVProvider, type KVPutOptions } from 'shared/platform/kv';
+
 export class KVCache {
-    constructor(private kv: KVNamespace) {}
+    constructor(private kv: KVProvider) {}
 
     private generateKey(prefix: string, key: string): string {
         return `cache-${prefix}:${key}`;
@@ -12,13 +14,13 @@ export class KVCache {
 
     async get<T>(prefix: string, key: string): Promise<T | null> {
         const fullKey = this.generateKey(prefix, key);
-        const value = await this.kv.get(fullKey, 'json');
+        const value = await this.kv.get<T>(fullKey, { type: 'json' });
         return value as T | null;
     }
 
     async set<T>(prefix: string, key: string, value: T, ttl?: number): Promise<void> {
         const fullKey = this.generateKey(prefix, key);
-        const options: KVNamespacePutOptions = {};
+        const options: KVPutOptions = {};
         if (ttl) {
             options.expirationTtl = ttl;
         }
@@ -33,8 +35,8 @@ export class KVCache {
     async deleteByPrefix(prefix: string): Promise<void> {
         let cursor: string | undefined = undefined;
         do {
-            const list: KVNamespaceListResult<unknown> = await this.kv.list({ prefix: `cache-${prefix}:`, cursor });
-            await Promise.all(list.keys.map((key: KVNamespaceListKey<unknown>) => this.kv.delete(key.name)));
+            const list = await this.kv.list({ prefix: `cache-${prefix}:`, cursor });
+            await Promise.all(list.keys.map((key) => this.kv.delete(key.name)));
             cursor = list.list_complete ? undefined : list.cursor;
         } while (cursor);
     }
@@ -45,6 +47,6 @@ export class KVCache {
 }
 
 export function createKVCache(env: Env): KVCache {
-    const kv = env.VibecoderStore;
+    const kv = createKVProvider(env);
     return new KVCache(kv);
 }

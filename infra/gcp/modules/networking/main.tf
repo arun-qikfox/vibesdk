@@ -23,7 +23,7 @@ resource "google_compute_subnetwork" "public" {
 }
 
 resource "google_vpc_access_connector" "serverless" {
-  name   = "vibesdk-serverless-connector"
+  name   = "vibesdk-svless-conn"
   region = var.region
   project = var.project_id
 
@@ -34,4 +34,3 @@ resource "google_vpc_access_connector" "serverless" {
   max_throughput        = 300
   machine_type          = "f1-micro"
 }
-

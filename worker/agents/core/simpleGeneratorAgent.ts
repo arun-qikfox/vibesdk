@@ -40,6 +40,7 @@ import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
 import { AppService } from '../../database';
 import { RateLimitExceededError } from 'shared/types/errors';
+import { isCloudflareRuntime } from 'shared/platform/runtimeProvider';
 import { generateId } from 'worker/utils/idGenerator';
 import { ImageAttachment, type ProcessedImageAttachment } from '../../types/image-attachment';
 import { OperationOptions } from '../operations/common';
@@ -2533,8 +2534,18 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         url: string, 
         viewport: { width: number; height: number } = { width: 1280, height: 720 }
     ): Promise<string> {
-        if (!this.env.DB || !this.getAgentId()) {
-            const error = 'Cannot capture screenshot: DB or agentId not available';
+        if (!isCloudflareRuntime(this.env)) {
+            const error = 'Cannot capture screenshot: Cloudflare runtime is required for browser rendering';
+            this.logger().warn(error);
+            this.broadcast(WebSocketMessageResponses.SCREENSHOT_CAPTURE_ERROR, {
+                error,
+                configurationError: true
+            });
+            throw new Error(error);
+        }
+
+        if (!this.getAgentId()) {
+            const error = 'Cannot capture screenshot: agentId not available';
             this.logger().warn(error);
             this.broadcast(WebSocketMessageResponses.SCREENSHOT_CAPTURE_ERROR, {
                 error,

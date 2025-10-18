@@ -1,11 +1,11 @@
 import { getConfigurationForModel } from '../../agents/inferutils/core';
 import { eq } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/d1';
 import { apps } from '../../database/schema';
 import { jwtVerify, SignJWT } from 'jose';
 import { isDev } from 'worker/utils/envs';
 import { RateLimitService } from '../rate-limit/rateLimits';
 import { getUserConfigurableSettings } from 'worker/config';
+import { createDatabaseService } from 'worker/database';
 
 export async function proxyToAiGateway(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     console.log(`[AI Proxy] Received request: ${request.method} ${request.url}`);
@@ -90,7 +90,7 @@ export async function proxyToAiGateway(request: Request, env: Env, _ctx: Executi
             });
         }
 
-        const db = drizzle(env.DB);
+        const db = createDatabaseService(env).db;
         const app = await db.select({
             id: apps.id,
             userId: apps.userId,

@@ -11,8 +11,13 @@ import { getSandboxService } from '../services/sandbox/factory';
 import { TemplateDetails } from '../services/sandbox/sandboxTypes';
 import { TemplateSelection } from './schemas';
 import type { ImageAttachment } from '../types/image-attachment';
+import { isCloudflareRuntime } from 'shared/platform/runtimeProvider';
 
 export async function getAgentStub(env: Env, agentId: string, searchInOtherJurisdictions: boolean = false, logger: StructuredLogger) : Promise<DurableObjectStub<SmartCodeGeneratorAgent>> {
+    if (!isCloudflareRuntime(env)) {
+        throw new Error('Code generation agent is only available on the Cloudflare runtime');
+    }
+
     if (searchInOtherJurisdictions) {
         // Try multiple jurisdictions until we find the agent
         const jurisdictions = [undefined, 'eu' as DurableObjectJurisdiction];

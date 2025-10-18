@@ -43,7 +43,7 @@ Goal: Serve the existing Worker entrypoint (`worker/index.ts`) on Google Cloud R
 ### Step 4: Publish Image via Cloud Build
 - [ ] Create `cloudbuild/workerd.yaml` with steps:
   1. build using the Dockerfile,
-  2. push to `us-central1-docker.pkg.dev/vibesdk-gcp/vibesdk/workerd:TAG`,
+  2. push to `us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:TAG`,
   3. substitute `TAG` from commit SHA.
 - [ ] Update Cloud Build trigger from step 5 in the previous spec to point at this file.
 - [ ] Test locally with `gcloud builds submit --config cloudbuild/workerd.yaml`.
@@ -74,4 +74,3 @@ Goal: Serve the existing Worker entrypoint (`worker/index.ts`) on Google Cloud R
 ## Hand-Off Notes
 - Keep the Cloud Run service private for now; public exposure will happen after DNS and TLS setup in later specs.
 - Update `migration/README.md` with any deviations before merging `feat/gcp-runtime`.
-

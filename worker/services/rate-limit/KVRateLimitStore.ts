@@ -1,12 +1,13 @@
 import { createObjectLogger } from '../../logger';
 import { KVRateLimitConfig } from './config';
 import type { RateLimitResult } from './DORateLimitStore';
+import type { KVProvider, KVPutOptions } from 'shared/platform/kv';
 
 export class KVRateLimitStore {
 	static logger = createObjectLogger(this, 'KVRateLimitStore');
 
 	static async increment(
-		kv: KVNamespace,
+		kv: KVProvider,
 		key: string,
 		config: KVRateLimitConfig,
 		incrementBy: number = 1
@@ -28,7 +29,7 @@ export class KVRateLimitStore {
 			const allBucketKeys = [...new Set([...mainBuckets, ...burstBuckets])];
 			const bucketResults = await Promise.all(
 				allBucketKeys.map(async (bucketKey) => {
-					const value = await kv.get(bucketKey);
+					const value = await kv.get<string>(bucketKey, { type: 'text' });
 					return { key: bucketKey, count: value ? parseInt(value, 10) || 0 : 0 };
 				})
 			);
@@ -49,7 +50,7 @@ export class KVRateLimitStore {
 			const currentBucketKey = `ratelimit:${key}:${currentBucket}`;
 			const maxTtlSeconds = Math.max(config.period, config.burstWindow ?? 60) + (config.bucketSize ?? 10);
 
-			await this.incrementBucketWithRetry(kv, currentBucketKey, maxTtlSeconds, incrementBy);
+            await this.incrementBucketWithRetry(kv, currentBucketKey, maxTtlSeconds, 3, incrementBy);
 
 			return { success: true, remainingLimit: Math.max(0, config.limit - mainCount - incrementBy) };
 		} catch (error) {
@@ -63,7 +64,7 @@ export class KVRateLimitStore {
 	}
 
 	static async getRemainingLimit(
-		kv: KVNamespace,
+		kv: KVProvider,
 		key: string,
 		config: KVRateLimitConfig
 	): Promise<number> {
@@ -74,7 +75,7 @@ export class KVRateLimitStore {
 		const mainBuckets = this.generateBucketKeys(key, now, mainWindow, bucketSize);
 		const counts = await Promise.all(
 			mainBuckets.map(async (bucketKey) => {
-				const value = await kv.get(bucketKey);
+				const value = await kv.get<string>(bucketKey, { type: 'text' });
 				return value ? parseInt(value, 10) || 0 : 0;
 			})
 		);
@@ -94,7 +95,7 @@ export class KVRateLimitStore {
 	}
 
 	private static async incrementBucketWithRetry(
-		kv: KVNamespace,
+		kv: KVProvider,
 		bucketKey: string,
 		ttlSeconds: number,
 		maxRetries: number = 3,
@@ -102,9 +103,10 @@ export class KVRateLimitStore {
 	): Promise<void> {
 		for (let attempt = 0; attempt < maxRetries; attempt++) {
 			try {
-				const current = await kv.get(bucketKey);
+				const current = await kv.get<string>(bucketKey, { type: 'text' });
 				const newCount = (current ? parseInt(current, 10) : 0) + incrementBy;
-				await kv.put(bucketKey, newCount.toString(), { expirationTtl: ttlSeconds });
+				const putOptions: KVPutOptions = { expirationTtl: ttlSeconds };
+				await kv.put(bucketKey, newCount.toString(), putOptions);
 				return;
 			} catch (error) {
 				if (error instanceof Error && error.message.includes('429') && attempt < maxRetries - 1) {
