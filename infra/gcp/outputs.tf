@@ -28,10 +28,21 @@ output "service_account_emails" {
 output "networking" {
   description = "Networking artifacts (VPC ID, subnets, serverless connector)."
   value = {
-    vpc_id             = module.networking.vpc_id
-    private_subnet     = module.networking.private_subnet
-    public_subnet      = module.networking.public_subnet
+    vpc_id               = module.networking.vpc_id
+    private_subnet       = module.networking.private_subnet
+    public_subnet        = module.networking.public_subnet
     serverless_connector = module.networking.serverless_connector
+  }
+}
+
+output "sql" {
+  description = "Cloud SQL resources (connection string components, secrets)."
+  value = {
+    instance_connection_name = module.sql.instance_connection_name
+    private_ip_address       = module.sql.private_ip_address
+    database_name            = module.sql.database_name
+    database_user            = module.sql.database_user
+    password_secret_name     = module.sql.password_secret_name
   }
 }
 
@@ -49,11 +60,20 @@ output "secret_manager_ids" {
   value       = module.secrets.secret_ids
 }
 
+output "templates_bucket" {
+  description = "Information about the templates storage bucket."
+  value = {
+    name      = module.storage.bucket_name
+    self_link = module.storage.bucket_self_link
+    url       = module.storage.bucket_url
+  }
+}
+
 output "runtime_service" {
   description = "Details of the Cloud Run control plane service."
   value = {
-    name             = module.runtime.service_name
-    uri              = module.runtime.service_uri
-    latest_revision  = module.runtime.latest_revision
+    name            = module.runtime.service_name
+    uri             = module.runtime.service_uri
+    latest_revision = module.runtime.latest_revision
   }
 }

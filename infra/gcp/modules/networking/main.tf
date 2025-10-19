@@ -23,14 +23,14 @@ resource "google_compute_subnetwork" "public" {
 }
 
 resource "google_vpc_access_connector" "serverless" {
-  name   = "vibesdk-svless-conn"
-  region = var.region
+  name    = "vibesdk-svless-conn"
+  region  = var.region
   project = var.project_id
 
   network = google_compute_network.vpc.name
 
-  ip_cidr_range         = "10.20.10.0/28"
-  min_throughput        = 200
-  max_throughput        = 300
-  machine_type          = "f1-micro"
+  ip_cidr_range  = "10.20.10.0/28"
+  min_throughput = 200
+  max_throughput = 300
+  machine_type   = "f1-micro"
 }

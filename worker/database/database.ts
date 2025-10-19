@@ -3,12 +3,12 @@
  * Provides database connection, core utilities, and base operations∂ƒ
  */
 
-import type { DrizzleD1Database } from 'drizzle-orm/d1';
 import * as schema from './schema';
 
 import type { HealthStatusResult } from './types';
-import { createDatabaseClient, isD1DatabaseClient } from './clients';
-import type { D1DatabaseClient } from './clients/d1Client';
+import type { DatabaseClient, DatabaseInstance } from './clients/types';
+import { createDatabaseClient } from './runtime/factory';
+import type { DatabaseRuntimeEnv } from './runtime/types';
 
 // ========================================
 // TYPE DEFINITIONS AND INTERFACES
@@ -32,16 +32,12 @@ export type {
  * Domain-specific operations are handled by dedicated service classes.
  */
 export class DatabaseService {
-    public readonly db: DrizzleD1Database<typeof schema>;
-    private readonly client: D1DatabaseClient;
+    public readonly db: DatabaseInstance;
+    private readonly client: DatabaseClient;
 
-    constructor(env: Env) {
-        const client = createDatabaseClient(env);
-        if (!isD1DatabaseClient(client)) {
-            throw new Error('Postgres database adapter is not yet implemented. Set RUNTIME_PROVIDER=cloudflare until the adapter is available.');
-        }
-        this.client = client;
-        this.db = this.client.getPrimary() as DrizzleD1Database<typeof schema>;
+    constructor(env: DatabaseRuntimeEnv) {
+        this.client = createDatabaseClient(env);
+        this.db = this.client.getPrimary();
     }
 
     /**
@@ -53,8 +49,8 @@ export class DatabaseService {
      *   - 'fresh': Routes first query to primary for latest data
      * @returns Drizzle database instance configured for read operations
      */
-    public getReadDb(strategy: 'fast' | 'fresh' = 'fast'): DrizzleD1Database<typeof schema> {
-        return this.client.getReadReplica(strategy) as DrizzleD1Database<typeof schema>;
+    public getReadDb(strategy: 'fast' | 'fresh' = 'fast'): DatabaseInstance {
+        return this.client.getReadReplica(strategy);
     }
 
     // ========================================
@@ -80,6 +76,6 @@ export class DatabaseService {
 /**
  * Factory function to create database service instance
  */
-export function createDatabaseService(env: Env): DatabaseService {
+export function createDatabaseService(env: DatabaseRuntimeEnv): DatabaseService {
     return new DatabaseService(env);
 }

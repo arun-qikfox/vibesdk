@@ -7,6 +7,7 @@ Current and planned modules:
 - `iam/` - Service accounts and project-level IAM bindings (runtime, CI, dev).
 - `runtime/` - Cloud Run services, IAM bindings, Artifact Registry references.
 - `sql/` - Cloud SQL instance, database, users, and secrets.
+- `storage/` - Google Cloud Storage buckets for templates and binary assets.
 - `sandbox/` - Cloud Run Jobs, Pub/Sub topics, and supporting IAM for sandbox previews.
 - `agents/` - Custom agent runtime infrastructure (post-migration task 07).
 

@@ -1,0 +1,149 @@
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres, { type Options, type Sql } from 'postgres';
+import * as schema from '../schema.gcp';
+import type { DatabaseClient, DatabaseInstance } from '../clients/types';
+import type { DatabaseRuntimeEnv } from './types';
+
+const DEFAULT_POOL_MAX = 8;
+const DEFAULT_IDLE_TIMEOUT_SECONDS = 30;
+const DEFAULT_CONNECT_TIMEOUT_SECONDS = 10;
+
+interface NormalizedConnectionConfig {
+    sql: Sql<unknown>;
+}
+
+export class PostgresDatabaseClient implements DatabaseClient {
+    public readonly kind = 'postgres' as const;
+
+    private readonly sql: Sql<unknown>;
+    private readonly primary: DatabaseInstance;
+
+    constructor(private readonly env: DatabaseRuntimeEnv) {
+        const { sql } = resolveConnection(this.env);
+        this.sql = sql;
+        this.primary = drizzle(sql, { schema }) as DatabaseInstance;
+    }
+
+    getPrimary(): DatabaseInstance {
+        return this.primary;
+    }
+
+    getReadReplica(_strategy?: 'fast' | 'fresh'): DatabaseInstance {
+        return this.primary;
+    }
+
+    async dispose(): Promise<void> {
+        await this.sql.end();
+    }
+}
+function resolveConnection(env: DatabaseRuntimeEnv): NormalizedConnectionConfig {
+    const databaseUrl = readConfig(env, 'DATABASE_URL');
+    if (!databaseUrl) {
+        throw new Error('DATABASE_URL must be provided for the Postgres database adapter');
+    }
+
+    const poolMax = parseInteger(readConfig(env, 'DATABASE_POOL_MAX'), DEFAULT_POOL_MAX);
+    const poolMin = parseInteger(readConfig(env, 'DATABASE_POOL_MIN'), 0);
+    const idleTimeout = parseInteger(
+        readConfig(env, 'DATABASE_POOL_IDLE_SECONDS'),
+        DEFAULT_IDLE_TIMEOUT_SECONDS,
+    );
+    const sslMode = readConfig(env, 'DATABASE_SSL_MODE');
+
+    const baseOptions: Partial<Options<unknown>> = {
+        max: poolMax,
+        idle_timeout: idleTimeout,
+        connect_timeout: DEFAULT_CONNECT_TIMEOUT_SECONDS,
+        prepare: false,
+    };
+    if (poolMin > 0) {
+        baseOptions.min = poolMin;
+    }
+
+    const sql = databaseUrl.includes('@//cloudsql/')
+        ? createCloudSqlClient(env, databaseUrl, baseOptions, sslMode)
+        : postgres(databaseUrl, {
+              ...baseOptions,
+              ssl: mapSslMode(sslMode),
+          });
+
+    return { sql };
+}
+function createCloudSqlClient(
+    env: DatabaseRuntimeEnv,
+    rawUrl: string,
+    baseOptions: Partial<Options<unknown>>,
+    sslMode?: string,
+): Sql<unknown> {
+    const normalized = rawUrl.replace('@//cloudsql/', '@placeholder/');
+    const url = new URL(normalized);
+    const [instanceConnectionName, ...databaseSegments] = url.pathname
+        .split('/')
+        .filter(Boolean);
+
+    if (!instanceConnectionName || databaseSegments.length === 0) {
+        throw new Error('Invalid Cloud SQL connection string. Expected instance and database name.');
+    }
+
+    const database = databaseSegments.join('/');
+    const username = decodeURIComponent(url.username);
+    const password = decodeURIComponent(url.password);
+    const socketOverride = readConfig(env, 'DATABASE_SOCKET_PATH');
+    const socketPath = socketOverride ?? ['/cloudsql', instanceConnectionName].join('/');
+
+    return postgres({
+        ...baseOptions,
+        host: socketPath,
+        database,
+        username,
+        password,
+        max: baseOptions.max,
+        idle_timeout: baseOptions.idle_timeout,
+        connect_timeout: baseOptions.connect_timeout,
+        prepare: baseOptions.prepare,
+        ssl: mapSslMode(sslMode ?? url.searchParams.get('sslmode') ?? undefined),
+    });
+}
+function mapSslMode(mode?: string) {
+    if (!mode) {
+        return undefined;
+    }
+
+    const normalized = mode.toLowerCase();
+
+    if (normalized === 'disable') {
+        return false;
+    }
+
+    if (normalized === 'verify-full') {
+        return { rejectUnauthorized: true } as const;
+    }
+
+    return { rejectUnauthorized: false } as const;
+}
+
+function readConfig(env: DatabaseRuntimeEnv, key: string): string | undefined {
+    const record = env as Record<string, unknown>;
+    const value = record[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+        return value.trim();
+    }
+
+    if (typeof process !== 'undefined' && process.env && typeof process.env[key] === 'string') {
+        const fromProcess = process.env[key];
+        if (fromProcess && fromProcess.trim().length > 0) {
+            return fromProcess.trim();
+        }
+    }
+
+    return undefined;
+}
+
+function parseInteger(value: string | undefined, fallback: number): number {
+    if (!value) {
+        return fallback;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}

@@ -190,6 +190,14 @@ const worker = {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const runtimeProvider = getRuntimeProvider(env);
         logger.info(`Received request: ${request.method} ${request.url} (runtime: ${runtimeProvider})`);
+
+		const envRecord = env as unknown as Record<string, unknown>;
+		if (!('DB' in envRecord) && typeof envRecord.DATABASE_URL === 'string') {
+			if (typeof process !== 'undefined' && process.env) {
+				process.env.DATABASE_URL = envRecord.DATABASE_URL;
+			}
+		}
+
 		// --- Pre-flight Checks ---
 
 		// 1. Critical configuration check: Ensure custom domain is set.

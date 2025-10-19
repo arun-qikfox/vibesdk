@@ -34,6 +34,30 @@ variable "vpc_cidr" {
   default     = "10.20.0.0/16"
 }
 
+variable "sql_instance_name" {
+  description = "Cloud SQL instance name for the primary application database."
+  type        = string
+  default     = "vibesdk-sql"
+}
+
+variable "sql_database_name" {
+  description = "Primary database created within the Cloud SQL instance."
+  type        = string
+  default     = "vibesdk"
+}
+
+variable "sql_user_name" {
+  description = "Application user provisioned in Cloud SQL."
+  type        = string
+  default     = "vibesdk_app"
+}
+
+variable "sql_password_secret_id" {
+  description = "Secret Manager secret ID used to persist the Cloud SQL user password."
+  type        = string
+  default     = "vibesdk-sql-app-password"
+}
+
 variable "artifact_registry_repositories" {
   description = "List of Artifact Registry repositories to create."
   type        = list(string)
@@ -121,10 +145,10 @@ variable "runtime_secret_bindings" {
   description = "Map of environment variable names to Secret Manager keys (from module.secrets) used in the runtime."
   type        = map(string)
   default = {
-    JWT_SECRET             = "JWT_SECRET"
-    SECRETS_ENCRYPTION_KEY = "SECRETS_ENCRYPTION_KEY"
-    WEBHOOK_SECRET         = "WEBHOOK_SECRET"
-    AI_PROXY_JWT_SECRET    = "AI_PROXY_JWT_SECRET"
+    JWT_SECRET               = "JWT_SECRET"
+    SECRETS_ENCRYPTION_KEY   = "SECRETS_ENCRYPTION_KEY"
+    WEBHOOK_SECRET           = "WEBHOOK_SECRET"
+    AI_PROXY_JWT_SECRET      = "AI_PROXY_JWT_SECRET"
     GOOGLE_AI_STUDIO_API_KEY = "GOOGLE_AI_STUDIO_API_KEY"
   }
 }
@@ -137,6 +161,29 @@ variable "runtime_labels" {
 
 variable "runtime_annotations" {
   description = "Annotations applied to the Cloud Run service."
+  type        = map(string)
+  default     = {}
+}
+
+variable "templates_bucket_name" {
+  description = "Name of the Google Cloud Storage bucket holding template assets."
+  type        = string
+}
+
+variable "templates_bucket_location" {
+  description = "Region/Location for the templates bucket."
+  type        = string
+  default     = "US"
+}
+
+variable "templates_bucket_versioning" {
+  description = "Enable object versioning on the templates bucket."
+  type        = bool
+  default     = true
+}
+
+variable "templates_bucket_labels" {
+  description = "Labels applied to the templates bucket."
   type        = map(string)
   default     = {}
 }

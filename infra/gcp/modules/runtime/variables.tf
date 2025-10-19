@@ -74,6 +74,12 @@ variable "labels" {
   default     = {}
 }
 
+variable "cloud_sql_instances" {
+  description = "List of Cloud SQL instance connection names to mount into the service."
+  type        = list(string)
+  default     = []
+}
+
 variable "annotations" {
   description = "Annotations to apply to the Cloud Run service."
   type        = map(string)

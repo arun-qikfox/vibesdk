@@ -68,10 +68,45 @@ function defineSuite() {
     });
   });
 
-  describe('GCP KV Provider stub', () => {
-    it('throws when invoked', async () => {
-      const provider = createKVProvider({ RUNTIME_PROVIDER: 'gcp' });
-      await expect(provider.get('missing')).rejects.toThrow();
+  describe('GCP KV Provider (in-memory)', () => {
+    it('supports basic put/get/delete operations', async () => {
+      const provider = createKVProvider({
+        RUNTIME_PROVIDER: 'gcp',
+        KV_IN_MEMORY: true,
+      });
+
+      await provider.put('foo', JSON.stringify({ hello: 'world' }));
+      const fetched = await provider.get<{ hello: string }>('foo', { type: 'json' });
+      expect(fetched).toEqual({ hello: 'world' });
+
+      await provider.delete('foo');
+      const afterDelete = await provider.get('foo', { type: 'text' });
+      expect(afterDelete).toBeNull();
+    });
+
+    it('honours key prefixes when listing', async () => {
+      const provider = createKVProvider({
+        RUNTIME_PROVIDER: 'gcp',
+        KV_IN_MEMORY: true,
+      });
+
+      await provider.put('cache:test:1', 'value');
+      await provider.put('cache:test:2', 'value');
+      await provider.put('other:key', 'value');
+
+      const result = await provider.list({ prefix: 'cache:test:' });
+      expect(result.keys.map((k) => k.name).sort()).toEqual(['cache:test:1', 'cache:test:2']);
+    });
+
+    it('respects expiration TTL', async () => {
+      const provider = createKVProvider({
+        RUNTIME_PROVIDER: 'gcp',
+        KV_IN_MEMORY: true,
+      });
+
+      await provider.put('temp:key', 'value', { expirationTtl: 0 });
+      const result = await provider.get('temp:key');
+      expect(result).toBeNull();
     });
   });
 }
