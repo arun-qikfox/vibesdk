@@ -37,22 +37,29 @@ function readEnv(env: EnvLike, key: string): string | undefined {
 }
 
 async function fetchMetadataToken(): Promise<{ token: string; expiry: number }> {
-	const response = await fetch(METADATA_TOKEN_ENDPOINT, {
-		headers: { 'Metadata-Flavor': 'Google' },
-	});
-	if (!response.ok) {
+	try {
+		const response = await fetch(METADATA_TOKEN_ENDPOINT, {
+			headers: { 'Metadata-Flavor': 'Google' },
+		});
+		if (!response.ok) {
+			throw new Error(
+				`Failed to retrieve access token from metadata server (status ${response.status})`,
+			);
+		}
+		const payload = (await response.json()) as {
+			access_token: string;
+			expires_in: number;
+		};
+		return {
+			token: payload.access_token,
+			expiry: Date.now() + payload.expires_in * 1000,
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
 		throw new Error(
-			`Failed to retrieve access token from metadata server (status ${response.status})`,
+			`Unable to contact Google metadata server. When running outside GCP, set GCP_ACCESS_TOKEN (message: ${message})`,
 		);
 	}
-	const payload = (await response.json()) as {
-		access_token: string;
-		expires_in: number;
-	};
-	return {
-		token: payload.access_token,
-		expiry: Date.now() + payload.expires_in * 1000,
-	};
 }
 
 async function getAccessToken(env: EnvLike): Promise<string> {

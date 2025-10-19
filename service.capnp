@@ -35,7 +35,8 @@ const config :Workerd.Config = (
          (name = "SECRETS_ENCRYPTION_KEY", fromEnvironment = "SECRETS_ENCRYPTION_KEY"),
          (name = "WEBHOOK_SECRET", fromEnvironment = "WEBHOOK_SECRET"),
          (name = "AI_PROXY_JWT_SECRET", fromEnvironment = "AI_PROXY_JWT_SECRET"),
-         (name = "GOOGLE_AI_STUDIO_API_KEY", fromEnvironment = "GOOGLE_AI_STUDIO_API_KEY")
+         (name = "GOOGLE_AI_STUDIO_API_KEY", fromEnvironment = "GOOGLE_AI_STUDIO_API_KEY"),
+         (name = "GCP_ACCESS_TOKEN", fromEnvironment = "GCP_ACCESS_TOKEN")
        ]
      )
     )
