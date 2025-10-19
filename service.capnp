@@ -11,7 +11,7 @@ const config :Workerd.Config = (
          (name = "cloudflare:email", esModule = embed "./stubs/email.js"),
          (name = "cloudflare-internal:email", esModule = embed "./stubs/email-internal.js")
        ],
-       compatibilityDate = "2025-10-11",
+       compatibilityDate = "2025-01-09",
        compatibilityFlags = ["nodejs_compat"],
        bindings = [
          (name = "RUNTIME_PROVIDER", fromEnvironment = "RUNTIME_PROVIDER"),

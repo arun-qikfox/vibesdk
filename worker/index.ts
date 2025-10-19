@@ -10,6 +10,10 @@ import { getPreviewDomain } from './utils/urls';
 import { proxyToAiGateway } from './services/aigateway-proxy/controller';
 import { isOriginAllowed } from './config/security';
 import { getRuntimeProvider, RuntimeProvider } from 'shared/platform/runtimeProvider';
+import {
+	createObjectStore,
+	type ObjectStoreGetResult,
+} from 'shared/platform/storage';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
@@ -29,6 +33,74 @@ function setOriginControl(env: Env, request: Request, currentHeaders: Headers): 
         currentHeaders.set('Access-Control-Allow-Origin', origin);
     }
     return currentHeaders;
+}
+
+function buildAssetKeyCandidates(pathname: string): string[] {
+	const cleanPath = pathname.replace(/[#?].*$/, '');
+	let key = cleanPath.replace(/^\/+/, '');
+	if (key === '') {
+		key = 'index.html';
+	}
+	if (key.endsWith('/')) {
+		key = `${key}index.html`;
+	}
+	const candidates = [key];
+	if (!key.endsWith('.html')) {
+		candidates.push('index.html');
+	}
+	return [...new Set(candidates)];
+}
+
+async function responseFromStoreResult(
+	result: ObjectStoreGetResult & { etag?: string },
+	method: string,
+): Promise<Response> {
+	const headers = new Headers();
+	const metadata = result.httpMetadata;
+	if (metadata?.contentType) {
+		headers.set('Content-Type', metadata.contentType);
+	}
+	if (metadata?.cacheControl) {
+		headers.set('Cache-Control', metadata.cacheControl);
+	}
+	if (metadata?.contentLanguage) {
+		headers.set('Content-Language', metadata.contentLanguage);
+	}
+	if (metadata?.contentDisposition) {
+		headers.set('Content-Disposition', metadata.contentDisposition);
+	}
+	if (result.etag) {
+		headers.set('ETag', result.etag);
+	}
+	if (method.toUpperCase() === 'HEAD') {
+		return new Response(null, { status: 200, headers });
+	}
+	const buffer = await result.arrayBuffer();
+	if (!headers.has('Content-Type')) {
+		headers.set('Content-Type', 'application/octet-stream');
+	}
+	headers.set('Content-Length', buffer.byteLength.toString());
+	return new Response(buffer, { status: 200, headers });
+}
+
+async function serveAssetFromObjectStore(request: Request, env: Env): Promise<Response | null> {
+	const store = createObjectStore(env as unknown as Record<string, unknown>);
+	const url = new URL(request.url);
+	const candidates = buildAssetKeyCandidates(url.pathname);
+	for (const key of candidates) {
+		try {
+			const asset = await store.get(key);
+			if (!asset) {
+				continue;
+			}
+			return await responseFromStoreResult(asset, request.method);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			logger.error(`Failed to read asset from GCS (key=${key})`, { error: message });
+			throw error;
+		}
+	}
+	return null;
 }
 
 /**
@@ -147,9 +219,20 @@ const worker = {
 
 		// Route 1: Main Platform Request (e.g., build.cloudflare.dev or localhost)
 		if (isMainDomainRequest) {
-			// Serve static assets for all non-API routes from the ASSETS binding.
+			// Serve static assets for all non-API routes from the object store in GCP,
+			// falling back to the legacy ASSETS binding when available.
 			if (!pathname.startsWith('/api/')) {
-				return env.ASSETS.fetch(request);
+				if (runtimeProvider === 'gcp') {
+					const assetResponse = await serveAssetFromObjectStore(request, env);
+					if (assetResponse) {
+						return assetResponse;
+					}
+					logger.warn(`Asset not found in GCS for path: ${pathname}, falling back to legacy binding.`);
+				}
+				if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+					return env.ASSETS.fetch(request);
+				}
+				return new Response('Not Found', { status: 404 });
 			}
 			// AI Gateway proxy for generated apps
 			if (pathname.startsWith('/api/proxy/openai')) {

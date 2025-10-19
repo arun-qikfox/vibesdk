@@ -4,7 +4,7 @@ FROM node:20-bullseye AS builder
 WORKDIR /app
 
 # Install workerd CLI (used in runtime image).
-RUN npm install -g workerd@1.20250109.0
+RUN npm install -g workerd@1.20251011.0
 
 # Copy package manifests then install production deps.
 COPY package.json package-lock.json ./
@@ -27,4 +27,4 @@ COPY container/workerd ./workerd-config
 # Expose Cloud Run port.
 ENV PORT=8080
 
-ENTRYPOINT ["/usr/local/bin/workerd", "serve", "--config", "/app/workerd-config/service.capnp"]
+ENTRYPOINT ["/usr/local/bin/workerd", "serve", "/app/workerd-config/service.capnp"]

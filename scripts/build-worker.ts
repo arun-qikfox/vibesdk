@@ -21,7 +21,10 @@ const ensureFile = (filePath: string, content: string) => {
 	if (!existsSync(dir)) {
 		mkdirSync(dir, { recursive: true });
 	}
-	if (!existsSync(filePath)) {
+	const existing = existsSync(filePath)
+		? readFileSync(filePath, 'utf-8')
+		: null;
+	if (existing !== content) {
 		writeFileSync(filePath, content, 'utf-8');
 	}
 };
@@ -33,7 +36,24 @@ const patchZodClassicModule = () => {
 	);
 	ensureFile(
 		zodCoreIndex,
-		"export * from './index.cjs';\nexport { default } from './index.cjs';\n"
+		[
+			"export * from './core.js';",
+			"export * from './parse.js';",
+			"export * from './errors.js';",
+			"export * from './schemas.js';",
+			"export * from './checks.js';",
+			"export * from './versions.js';",
+			"export * as util from './util.js';",
+			"export * as regexes from './regexes.js';",
+			"export * as locales from '../locales/index.js';",
+			"export * from './registries.js';",
+			"export * from './doc.js';",
+			"export * from './api.js';",
+			"export * from './function.js';",
+			"export * from './to-json-schema.js';",
+			"export * as JSONSchema from './json-schema.js';",
+			"",
+		].join('\n')
 	);
 
 	const zodCoreApi = resolve(
@@ -52,7 +72,7 @@ const patchZodClassicModule = () => {
 
 	ensureFile(
 		localesEn,
-		'const messages = {};\nexport default messages;\nexport { messages };\n'
+		"const messages = {};\nexport function en() {\n\treturn messages;\n}\nexport default en;\nexport { messages };\n"
 	);
 
 	ensureFile(
@@ -62,7 +82,7 @@ const patchZodClassicModule = () => {
 
 	ensureFile(
 		localesIndexCjs,
-		"const en = require('./en.js');\nmodule.exports = { en, default: { en } };\n"
+		"const messages = {};\nfunction en() {\n\treturn messages;\n}\nmodule.exports = { en, messages, default: en };\n"
 	);
 };
 

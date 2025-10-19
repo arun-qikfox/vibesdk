@@ -16,6 +16,13 @@ into:
 `npm run build:worker` before building the container image so the latest bundle
 is available at that path.
 
+## Compatibility Date
+
+`service.capnp` specifies a `compatibilityDate`. Always ensure this matches the
+maximum date supported by the bundled `workerd` binary (check with
+`workerd --version`). If the date is newer than what `workerd` understands,
+Cloud Run will fail to start the container.
+
 ## Replacing Stubs with Real Implementations
 
 Each stub exports the minimum surface area required by the existing worker code
