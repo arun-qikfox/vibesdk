@@ -187,3 +187,49 @@ variable "templates_bucket_labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "sandbox_pubsub_topic" {
+  description = "Pub/Sub topic name for sandbox execution requests."
+  type        = string
+  default     = "vibesdk-sandbox-requests"
+}
+
+variable "sandbox_job_name" {
+  description = "Cloud Run Job name for sandbox execution."
+  type        = string
+  default     = "vibesdk-sandbox-job"
+}
+
+variable "sandbox_job_image" {
+  description = "Container image URI for sandbox job executions."
+  type        = string
+}
+
+variable "sandbox_job_env" {
+  description = "Environment variables injected into the sandbox job container."
+  type        = map(string)
+  default     = {}
+}
+
+variable "sandbox_job_resource_limits" {
+  description = "Resource limits for sandbox job containers."
+  type        = map(string)
+  default     = {}
+}
+
+variable "sandbox_job_service_account" {
+  description = "Service account email used by the sandbox Cloud Run job."
+  type        = string
+}
+
+variable "sandbox_job_max_retries" {
+  description = "Maximum retry attempts for the sandbox job."
+  type        = number
+  default     = 1
+}
+
+variable "sandbox_job_timeout" {
+  description = "Timeout for sandbox job executions (e.g., '3600s')."
+  type        = string
+  default     = "3600s"
+}

@@ -67,6 +67,20 @@ module "storage" {
   }
 }
 
+module "sandbox" {
+  source                 = "./modules/sandbox"
+  project_id             = local.project_id
+  region                 = local.region
+  pubsub_topic           = var.sandbox_pubsub_topic
+  job_name               = var.sandbox_job_name
+  job_image              = var.sandbox_job_image
+  job_env                = var.sandbox_job_env
+  job_resource_limits    = var.sandbox_job_resource_limits
+  job_service_account    = var.sandbox_job_service_account
+  job_max_retries        = var.sandbox_job_max_retries
+  job_timeout            = var.sandbox_job_timeout
+}
+
 module "runtime" {
   source                = "./modules/runtime"
   project_id            = local.project_id
