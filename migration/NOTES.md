@@ -17,3 +17,10 @@
 - `auth_attempts.id` now auto-increments via `serial` to mimic SQLite rowid behavior.
 - Cloud Run mounts the Cloud SQL Unix socket at `/cloudsql` and loads `DATABASE_URL` from Secret Manager, generated alongside the database password.
 - Firestore collection `FIRESTORE_COLLECTION` (default `vibesdk-kv`) backs the GCP KV adapter; when running outside GCP, set `KV_IN_MEMORY=true` to test the provider locally.
+- Template assets now live in the `vibesdk-templates` GCS bucket; the automation scripts detect `RUNTIME_PROVIDER=gcp` and call `gsutil rsync` during setup/deploy, so ensure gcloud/gsutil is available locally or run `gsutil -m rsync -r <templates-dir> gs://vibesdk-templates` manually if needed.
+
+## Outstanding Cloudflare Bindings (handoff to Spec 04)
+- Durable Object implementations (`CodeGenObject`, `DORateLimitStore`, sandbox DOs) still assume Cloudflare Workers. GCP equivalents will be designed in Spec 04.
+- Dispatcher namespace (`env.DISPATCHER`) is only available on Cloudflare; GCP deployments should treat sandbox previews as unsupported for now.
+- Cloudflare Images integration remains optional; when `USE_CLOUDFLARE_IMAGES=true` the upload helper still targets the Cloudflare API.
+- AI Gateway and other Cloudflare-specific services stay mapped to their existing bindings; GCP deployment relies on Secret Manager/env vars instead of recreating those services.

@@ -21,6 +21,7 @@ interface SetupConfig {
 	useAIGateway: boolean;
 	aiGatewayUrl?: string;
 	useRemoteBindings: boolean;
+	runtimeProvider: 'cloudflare' | 'gcp';
 	devVars: Record<string, string>;
 	setupRemote?: boolean;
 	prodDomain?: string;
@@ -325,11 +326,12 @@ class SetupManager {
 
 		console.log('
 ☁️  Runtime Provider & GCP Configuration');
-		const runtimeDefault = (this.existingConfig.RUNTIME_PROVIDER || 'gcp').toLowerCase();
-		const runtimeInput = await this.promptWithDefault('Default runtime provider (cloudflare/gcp): ', runtimeDefault);
-		const normalizedRuntime = runtimeInput.trim().toLowerCase() === 'gcp' ? 'gcp' : 'cloudflare';
-		const devVars: Record<string, string> = {};
-		devVars.RUNTIME_PROVIDER = normalizedRuntime;
+        const runtimeDefault = (this.existingConfig.RUNTIME_PROVIDER || 'gcp').toLowerCase();
+        const runtimeInput = await this.promptWithDefault('Default runtime provider (cloudflare/gcp): ', runtimeDefault);
+        const normalizedRuntime = runtimeInput.trim().toLowerCase() === 'gcp' ? 'gcp' : 'cloudflare';
+        const runtimeProvider = normalizedRuntime as 'cloudflare' | 'gcp';
+        const devVars: Record<string, string> = {};
+        devVars.RUNTIME_PROVIDER = runtimeProvider;
 
 		const projectDefault = this.existingConfig.GCP_PROJECT_ID || '';
 		const gcpProjectId = await this.promptWithDefault('Enter your GCP project ID (optional): ', projectDefault);
@@ -337,11 +339,19 @@ class SetupManager {
 			devVars.GCP_PROJECT_ID = gcpProjectId.trim();
 		}
 
-		const regionDefault = this.existingConfig.GCP_REGION || 'us-central1';
-		const gcpRegionInput = await this.promptWithDefault('Enter your GCP region (default us-central1): ', regionDefault);
-		if (gcpRegionInput) {
-			devVars.GCP_REGION = gcpRegionInput.trim();
-		}
+        const regionDefault = this.existingConfig.GCP_REGION || 'us-central1';
+        const gcpRegionInput = await this.promptWithDefault('Enter your GCP region (default us-central1): ', regionDefault);
+        if (gcpRegionInput) {
+            devVars.GCP_REGION = gcpRegionInput.trim();
+        }
+
+        if (runtimeProvider === 'gcp') {
+            const bucketDefault = this.existingConfig.GCS_TEMPLATES_BUCKET || 'vibesdk-templates';
+            const bucketInput = await this.promptWithDefault('Enter your GCS templates bucket name: ', bucketDefault);
+            if (bucketInput) {
+                devVars.GCS_TEMPLATES_BUCKET = bucketInput.trim();
+            }
+        }
 
 		// AI Gateway configuration
 		console.log('\n🤖 AI Gateway Configuration');
@@ -496,18 +506,19 @@ class SetupManager {
 		// Prepare production vars (copy dev vars as defaults)
 		const prodVars = setupRemote && prodDomain ? { ...devVars, CUSTOM_DOMAIN: prodDomain } : undefined;
 
-		this.config = {
-			accountId,
-			apiToken,
-			customDomain: finalDomain,
-			useAIGateway,
-			aiGatewayUrl,
-			useRemoteBindings,
-			devVars,
-			setupRemote,
-			prodDomain,
-			prodVars,
-			customProviderKeys
+        this.config = {
+            accountId,
+            apiToken,
+            customDomain: finalDomain,
+            useAIGateway,
+            aiGatewayUrl,
+            useRemoteBindings,
+            runtimeProvider,
+            devVars,
+            setupRemote,
+            prodDomain,
+            prodVars,
+            customProviderKeys
 		};
 
 		console.log('\n✅ Configuration collected successfully\n');
@@ -1889,8 +1900,28 @@ class SetupManager {
 				}
 			}
 
-			// Check if deploy script exists
-			const deployScript = join(templatesDir, 'deploy_templates.sh');
+		const runtimeProvider = this.config.runtimeProvider ?? 'cloudflare';
+
+		if (runtimeProvider === 'gcp') {
+			const bucketName = this.config.devVars.GCS_TEMPLATES_BUCKET || 'vibesdk-templates';
+			if (!bucketName) {
+				console.warn('⚠️  GCS_TEMPLATES_BUCKET not configured. Skipping template deployment.');
+				return;
+			}
+
+			console.log(`🚀 Syncing templates to GCS bucket: ${bucketName}`);
+			uploadTemplatesDirectory({
+				provider: 'gcp',
+				templatesDir,
+				bucketName,
+				projectId: this.config.devVars.GCP_PROJECT_ID,
+			});
+			console.log('✅ Templates deployed successfully to GCS');
+			return;
+		}
+
+		// Check if deploy script exists
+		const deployScript = join(templatesDir, 'deploy_templates.sh');
 			if (!existsSync(deployScript)) {
 				console.warn('⚠️  deploy_templates.sh not found in templates repository');
 				console.warn('   Skipping template deployment - templates may need to be deployed manually');
@@ -1901,14 +1932,15 @@ class SetupManager {
 			execSync(`chmod +x "${deployScript}"`, { cwd: templatesDir });
 
 			// Deploy to local R2 first (always available)
-			console.log(`🚀 Deploying templates to local R2 bucket: ${templatesBucket.bucket_name}`);
-			uploadTemplatesDirectory({
-				templatesDir,
-				bucketName: templatesBucket.bucket_name,
-				accountId: this.config.accountId,
-				apiToken: this.config.apiToken,
-				localMode: true,
-			});
+		console.log(`🚀 Deploying templates to local R2 bucket: ${templatesBucket.bucket_name}`);
+		uploadTemplatesDirectory({
+			provider: 'cloudflare',
+			templatesDir,
+			bucketName: templatesBucket.bucket_name,
+			accountId: this.config.accountId,
+			apiToken: this.config.apiToken,
+			localMode: true,
+		});
 
 			console.log('✅ Templates deployed successfully to local R2');
 
@@ -1918,6 +1950,7 @@ class SetupManager {
 
 				try {
 					uploadTemplatesDirectory({
+						provider: 'cloudflare',
 						templatesDir,
 						bucketName: templatesBucket.bucket_name,
 						accountId: this.config.accountId,

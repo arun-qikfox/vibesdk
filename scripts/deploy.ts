@@ -70,6 +70,9 @@ interface WranglerConfig {
 		CUSTOM_PREVIEW_DOMAIN?: string;
 		SANDBOX_INSTANCE_TYPE?: string;
 		DISPATCH_NAMESPACE?: string;
+		RUNTIME_PROVIDER?: string;
+		GCS_TEMPLATES_BUCKET?: string;
+		GCP_PROJECT_ID?: string;
 		[key: string]: string | undefined;
 	};
 }
@@ -80,6 +83,9 @@ interface EnvironmentConfig {
 	TEMPLATES_REPOSITORY: string;
 	CLOUDFLARE_AI_GATEWAY?: string;
 	CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
+	RUNTIME_PROVIDER: 'cloudflare' | 'gcp';
+	GCS_TEMPLATES_BUCKET?: string;
+	GCP_PROJECT_ID?: string;
 }
 
 class DeploymentError extends Error {
@@ -242,6 +248,12 @@ class CloudflareDeploymentManager {
 	private getEnvironmentVariables(): EnvironmentConfig {
 		const apiToken = process.env.CLOUDFLARE_API_TOKEN!;
 		const aiGatewayToken = process.env.CLOUDFLARE_AI_GATEWAY_TOKEN || apiToken;
+		const runtimeProvider = (process.env.RUNTIME_PROVIDER || this.config.vars?.RUNTIME_PROVIDER || 'cloudflare')
+			.toLowerCase() as 'cloudflare' | 'gcp';
+		const gcsBucket =
+			process.env.GCS_TEMPLATES_BUCKET || this.config.vars?.GCS_TEMPLATES_BUCKET;
+		const gcpProjectId =
+			process.env.GCP_PROJECT_ID || this.config.vars?.GCP_PROJECT_ID;
 		
 		return {
 			CLOUDFLARE_API_TOKEN: apiToken,
@@ -255,6 +267,9 @@ class CloudflareDeploymentManager {
 				process.env.CLOUDFLARE_AI_GATEWAY ||
 				this.config.vars?.CLOUDFLARE_AI_GATEWAY || "orange-build-gateway",
 			CLOUDFLARE_AI_GATEWAY_TOKEN: aiGatewayToken,
+			RUNTIME_PROVIDER: runtimeProvider,
+			GCS_TEMPLATES_BUCKET: gcsBucket,
+			GCP_PROJECT_ID: gcpProjectId,
 		};
 	}
 
@@ -605,6 +620,26 @@ class CloudflareDeploymentManager {
 				}
 			}
 
+			const runtimeProvider = this.env.RUNTIME_PROVIDER ?? 'cloudflare';
+			if (runtimeProvider === 'gcp') {
+				const bucketName = this.env.GCS_TEMPLATES_BUCKET || 'vibesdk-templates';
+				if (!bucketName) {
+					console.warn('⚠️  GCS_TEMPLATES_BUCKET not configured. Skipping template deployment.');
+					return;
+				}
+
+				console.log(`🚀 Syncing templates to GCS bucket: ${bucketName}`);
+				uploadTemplatesDirectory({
+					provider: 'gcp',
+					templatesDir,
+					bucketName,
+					projectId: this.env.GCP_PROJECT_ID,
+				});
+
+				console.log('✅ Templates deployed successfully to GCS');
+				return;
+			}
+
 			// Find R2 bucket name from config
 			const templatesBucket = this.config.r2_buckets?.find(
 				(bucket) => bucket.binding === 'TEMPLATES_BUCKET',
@@ -634,6 +669,7 @@ class CloudflareDeploymentManager {
 			);
 
             uploadTemplatesDirectory({
+                provider: 'cloudflare',
                 templatesDir,
                 bucketName: templatesBucket.bucket_name,
                 accountId: this.env.CLOUDFLARE_ACCOUNT_ID,

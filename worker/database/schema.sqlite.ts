@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 
 // Schema enum arrays derived from config types  
 const REASONING_EFFORT_VALUES = ['low', 'medium', 'high'] as const;
@@ -556,6 +556,15 @@ export const systemSettings = sqliteTable('system_settings', {
     keyIdx: uniqueIndex('system_settings_key_idx').on(table.key),
 }));
 
+export const rateLimitBuckets = sqliteTable('rate_limit_buckets', {
+    key: text('key').notNull(),
+    windowStart: integer('window_start').notNull(),
+    count: integer('count').default(0).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => ({
+    pk: primaryKey(table.key, table.windowStart),
+}));
+
 // ========================================
 // TYPE EXPORTS FOR APPLICATION USE
 // ========================================
@@ -615,3 +624,6 @@ export type NewUserModelProvider = typeof userModelProviders.$inferInsert;
 
 export type Star = typeof stars.$inferSelect;
 export type NewStar = typeof stars.$inferInsert;
+
+export type RateLimitBucketRecord = typeof rateLimitBuckets.$inferSelect;
+export type NewRateLimitBucketRecord = typeof rateLimitBuckets.$inferInsert;

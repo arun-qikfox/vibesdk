@@ -2,11 +2,13 @@ import { execSync } from 'child_process';
 import { join } from 'path';
 
 export interface UploadTemplatesOptions {
-    templatesDir: string;
-    bucketName: string;
-    accountId: string;
-    apiToken: string;
-    localMode: boolean;
+	templatesDir: string;
+	bucketName: string;
+	provider?: 'cloudflare' | 'gcp';
+	accountId?: string;
+	apiToken?: string;
+	localMode?: boolean;
+	projectId?: string;
 }
 
 /**
@@ -25,22 +27,57 @@ export function resetExecSyncImplementation() {
 }
 
 export function uploadTemplatesDirectory(options: UploadTemplatesOptions) {
-    const { templatesDir, bucketName, accountId, apiToken, localMode } = options;
+	const provider = (options.provider ?? process.env.RUNTIME_PROVIDER ?? 'cloudflare').toLowerCase() as
+		| 'cloudflare'
+		| 'gcp';
 
-    const deployScript = join(templatesDir, 'deploy_templates.sh');
+	if (provider === 'gcp') {
+		const { templatesDir, bucketName, projectId } = options;
+		if (!bucketName) {
+			throw new Error('GCS bucket name is required to upload templates on GCP.');
+		}
 
-    const env = {
-        ...process.env,
-        CLOUDFLARE_API_TOKEN: apiToken,
-        CLOUDFLARE_ACCOUNT_ID: accountId,
-        BUCKET_NAME: bucketName,
-        R2_BUCKET_NAME: bucketName,
-        LOCAL_R2: localMode ? 'true' : 'false',
-    };
+		const env = {
+			...process.env,
+			GCLOUD_PROJECT: projectId ?? process.env.GCLOUD_PROJECT,
+			GOOGLE_CLOUD_PROJECT: projectId ?? process.env.GOOGLE_CLOUD_PROJECT,
+		};
 
-    execImpl('./deploy_templates.sh', {
-        stdio: 'inherit',
-        cwd: templatesDir,
-        env,
-    });
+		const target = `gs://${bucketName}`;
+		const excludeGit = '-x "\\.git.*"';
+		const rsyncCommand = `gsutil -m rsync -r -d ${excludeGit} "${templatesDir}" "${target}"`;
+
+		try {
+			execImpl(rsyncCommand, { stdio: 'inherit', cwd: templatesDir, env });
+			return;
+		} catch (error) {
+			console.warn('⚠️  gsutil rsync failed, attempting gcloud storage upload...', error);
+			const gcloudCommand = `gcloud storage rsync --recursive "${templatesDir}" "${target}"`;
+			execImpl(gcloudCommand, { stdio: 'inherit', cwd: templatesDir, env });
+			return;
+		}
+	}
+
+	const { templatesDir: dir, bucketName, accountId, apiToken, localMode } = options;
+
+	if (!accountId || !apiToken) {
+		throw new Error('Cloudflare accountId and apiToken are required to upload templates to R2.');
+	}
+
+	const deployScript = join(dir, 'deploy_templates.sh');
+
+	const env = {
+		...process.env,
+		CLOUDFLARE_API_TOKEN: apiToken,
+		CLOUDFLARE_ACCOUNT_ID: accountId,
+		BUCKET_NAME: bucketName,
+		R2_BUCKET_NAME: bucketName,
+		LOCAL_R2: localMode ? 'true' : 'false',
+	};
+
+	execImpl('./deploy_templates.sh', {
+		stdio: 'inherit',
+		cwd: dir,
+		env,
+	});
 }

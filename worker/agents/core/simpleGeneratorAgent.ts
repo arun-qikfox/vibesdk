@@ -27,6 +27,8 @@ import { PhaseGenerationOperation } from '../operations/PhaseGeneration';
 import { ScreenshotAnalysisOperation } from '../operations/ScreenshotAnalysis';
 // Database schema imports removed - using zero-storage OAuth flow
 import { BaseSandboxService } from '../../services/sandbox/BaseSandboxService';
+import { getAgentStore, buildAgentState } from 'worker/utils/agentStore';
+import { getRuntimeProvider } from 'shared/platform/runtimeProvider';
 import { getSandboxService } from '../../services/sandbox/factory';
 import { WebSocketMessageData, WebSocketMessageType } from '../../api/websocketTypes';
 import { InferenceContext, AgentActionKey } from '../inferutils/config.types';
@@ -267,6 +269,21 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         ..._args: unknown[]
     ): Promise<CodeGenState> {
 
+        const runtimeProvider = getRuntimeProvider(this.env);
+        const agentStore = getAgentStore(this.env);
+
+        if (runtimeProvider === "gcp" && agentStore) {
+            const existing = await agentStore.getSessionState(initArgs.sandboxSessionId);
+            if (existing?.payload) {
+                try {
+                    super.setState(existing.payload as CodeGenState);
+                    this.logger().info("Loaded agent state from Firestore");
+                } catch (error) {
+                    this.logger().warn("Failed to hydrate agent state, proceeding with new state", { error });
+                }
+            }
+        }
+
         const { query, language, frameworks, hostname, inferenceContext, templateInfo, sandboxSessionId } = initArgs;
         this.initLogger(inferenceContext.agentId, sandboxSessionId, inferenceContext.userId);
         
@@ -295,7 +312,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         const packageJsonFile = templateInfo.templateDetails?.files.find(file => file.filePath === 'package.json');
         const packageJson = packageJsonFile ? packageJsonFile.fileContents : '';
         
-        this.setState({
+        const newState: CodeGenState = {
             ...this.initialState,
             query,
             blueprint,
@@ -307,7 +324,8 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             sessionId: sandboxSessionId,
             hostname,
             inferenceContext,
-        });
+        };
+        this.setState(newState);
 
         try {
             // Deploy to sandbox service and generate initial setup commands in parallel
@@ -343,8 +361,21 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     }
 
     setState(state: CodeGenState): void {
+        const runtimeProvider = getRuntimeProvider(this.env);
+        const agentStore = getAgentStore(this.env);
         try {
-            super.setState(state);
+            if (runtimeProvider === "gcp" && agentStore) {
+                const snapshot = JSON.parse(JSON.stringify(state)) as CodeGenState;
+                super.setState(snapshot);
+                agentStore.putSessionState(
+                    state.sessionId,
+                    buildAgentState(state.sessionId, snapshot)
+                ).catch((error) => {
+                    this.logger().error("Failed to persist agent state to Firestore", { error });
+                });
+            } else {
+                super.setState(state);
+            }
         } catch (error) {
             this.logger().error("Error setting state:", error);
             this.broadcast(WebSocketMessageResponses.ERROR, {

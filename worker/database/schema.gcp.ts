@@ -5,11 +5,13 @@ import {
 	integer,
 	boolean,
 	timestamp,
+	bigint,
 	jsonb,
 	doublePrecision,
 	index,
 	uniqueIndex,
 	serial,
+	primaryKey,
 } from 'drizzle-orm/pg-core';
 
 // Schema enum arrays derived from config types
@@ -850,6 +852,21 @@ export const systemSettings = pgTable(
 	}),
 );
 
+export const rateLimitBuckets = pgTable(
+	'rate_limit_buckets',
+	{
+		key: text('key').notNull(),
+		windowStart: bigint('window_start', { mode: 'number' }).notNull(),
+		count: integer('count').notNull().default(0),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.default(sql`CURRENT_TIMESTAMP`)
+			.notNull(),
+	},
+	(table) => ({
+		pk: primaryKey({ columns: [table.key, table.windowStart] }),
+	}),
+);
+
 // ========================================
 // TYPE EXPORTS FOR APPLICATION USE
 // ========================================
@@ -911,3 +928,6 @@ export type NewUserModelProvider = typeof userModelProviders.$inferInsert;
 
 export type Star = typeof stars.$inferSelect;
 export type NewStar = typeof stars.$inferInsert;
+
+export type RateLimitBucketRecord = typeof rateLimitBuckets.$inferSelect;
+export type NewRateLimitBucketRecord = typeof rateLimitBuckets.$inferInsert;

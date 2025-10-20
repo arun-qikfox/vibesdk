@@ -14,6 +14,8 @@ import {
 	createObjectStore,
 	type ObjectStoreGetResult,
 } from 'shared/platform/storage';
+import { ensureSecrets } from './utils/secretLoader';
+import { createAgentStore } from 'shared/platform/durableObjects';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
@@ -186,10 +188,24 @@ async function handleUserAppRequest(request: Request, env: Env, runtimeProvider:
 /**
  * Main Worker fetch handler with robust, secure routing.
  */
+let secretsLoaded = false;
+
 const worker = {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const runtimeProvider = getRuntimeProvider(env);
         logger.info(`Received request: ${request.method} ${request.url} (runtime: ${runtimeProvider})`);
+
+		if (!secretsLoaded && runtimeProvider === 'gcp') {
+			await ensureSecrets(env);
+			secretsLoaded = true;
+		}
+
+		try {
+			const agentStore = createAgentStore(runtimeProvider, env as unknown as Record<string, unknown>);
+			(env as unknown as Record<string, unknown>).AgentStore = agentStore;
+		} catch (error) {
+			logger.warn('Agent store initialization failed', { error });
+		}
 
 		const envRecord = env as unknown as Record<string, unknown>;
 		if (!('DB' in envRecord) && typeof envRecord.DATABASE_URL === 'string') {

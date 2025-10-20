@@ -403,3 +403,16 @@ The "Deploy to Cloudflare" button in the chat interface (for generated apps) has
 - Individual instance failures that resolve quickly
 - Occasional tunnel connection issues
 - Brief periods of unavailability during restarts If issue persists, please open an issue on GitHub with the status report and any additional information you think would be helpful.
+
+## GCP Runtime Notes
+
+- Secrets for the runtime (`JWT_SECRET`, `SECRETS_ENCRYPTION_KEY`, `WEBHOOK_SECRET`, `AI_PROXY_JWT_SECRET`, `GOOGLE_AI_STUDIO_API_KEY`, and `vibesdk-sql-connection-url`) live in **Secret Manager**. Add a new version whenever the value changes, e.g.:
+
+  ```bash
+  printf '%s' 'your-secret-value' \
+    | gcloud secrets versions add JWT_SECRET --data-file=- --project=<gcp-project>
+  ```
+
+- After updating secrets, run `terraform apply -target=module.runtime` to roll out a new Cloud Run revision that reads the latest values.
+
+- `scripts/setup.ts` and `scripts/deploy.ts` automatically sync template assets to `gs://vibesdk-templates` when `RUNTIME_PROVIDER=gcp` is set.

@@ -9,6 +9,7 @@ import { isCloudflareRuntime } from 'shared/platform/runtimeProvider';
 import { isDev } from 'worker/utils/envs';
 import { AIModels } from 'worker/agents/inferutils/config.types';
 import { createKVProvider } from 'shared/platform/kv';
+import { getRateLimitBackend } from 'worker/utils/rateLimitBackend';
 
 export class RateLimitService {
     static logger = createObjectLogger(this, 'RateLimitService');
@@ -56,6 +57,11 @@ export class RateLimitService {
         config: DORateLimitConfig,
         incrementBy: number = 1
     ): Promise<boolean> {
+        const backend = getRateLimitBackend(env);
+        if (backend) {
+            const result = await backend.increment(key, config, incrementBy);
+            return result.success;
+        }
         try {
             if (!isCloudflareRuntime(env)) {
                 this.logger.warn('Durable Object rate limiting is not available for the current runtime provider', {
