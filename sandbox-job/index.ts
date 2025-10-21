@@ -95,16 +95,18 @@ async function main(): Promise<void> {
 	try {
 		const { data, ackId } = await pullMessage(env);
 
-		await store
-			.markStatus(data.sessionId, data.action, 'running', {
+		try {
+			await store.markStatus(data.sessionId, data.action, 'running', {
 				message: 'Sandbox job execution started.',
-			})
-			.catch(() => undefined);
+			});
+		} catch (error) {
+			console.error('Failed to mark sandbox job as running', error);
+		}
 
 		// TODO: Implement sandbox container orchestration here.
 		const message = `Sandbox action "${data.action}" executed (stub).`;
-		await store
-			.markStatus(data.sessionId, data.action, 'succeeded', {
+		try {
+			await store.markStatus(data.sessionId, data.action, 'succeeded', {
 				message,
 				output: {
 					action: data.action,
@@ -113,8 +115,10 @@ async function main(): Promise<void> {
 					params: data.params,
 					note: 'Execution stubbed; replace with real implementation.',
 				},
-			})
-			.catch(() => undefined);
+			});
+		} catch (error) {
+			console.error('Failed to mark sandbox job as succeeded', error);
+		}
 
 		await ackMessage(env, ackId).catch((error) => {
 			console.error('Failed to acknowledge Pub/Sub message', error);

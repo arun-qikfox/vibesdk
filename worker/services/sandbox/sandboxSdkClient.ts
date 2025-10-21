@@ -33,7 +33,7 @@ import { createObjectLogger } from '../../logger';
 import { env } from 'cloudflare:workers'
 import { BaseSandboxService } from './BaseSandboxService';
 
-import { getDeploymentAdapter } from 'shared/platform/deployment';
+import { getDeploymentAdapter, getDeploymentTarget } from 'shared/platform/deployment';
 import { 
     createAssetManifest 
 } from '../deployer/utils/index';
@@ -1943,43 +1943,45 @@ export class SandboxSdkClient extends BaseSandboxService {
                 assetsManifest,
                 config.compatibility_flags
             );
-            
-            // Step 7: Deploy using pure function
-            this.logger.info('Deploying to Cloudflare');
-            if ('DISPATCH_NAMESPACE' in env) {
-                this.logger.info('Using dispatch namespace', { dispatchNamespace: env.DISPATCH_NAMESPACE });
-                await deployment.deployToDispatch(
-                    {
+
+            if (!('DISPATCH_NAMESPACE' in env) || typeof env.DISPATCH_NAMESPACE !== 'string') {
+                throw new Error('DISPATCH_NAMESPACE not found in environment variables, cannot deploy without dispatch namespace');
+            }
+
+            const dispatchNamespace = env.DISPATCH_NAMESPACE as string;
+
+            const target = getDeploymentTarget(env, 'cloudflare-workers');
+            this.logger.info('Deploying to Cloudflare via deployment target', {
+                target: target.id,
+                dispatchNamespace,
+            });
+
+            const result = await target.deploy({
+                env,
+                instanceId,
+                projectName,
+                payload: {
+                    deployConfig: {
                         ...deployConfig,
-                        dispatchNamespace: env.DISPATCH_NAMESPACE as string
+                        dispatchNamespace,
                     },
                     fileContents,
                     additionalModules,
-                    config.migrations,
-                    config.assets
-                );
-            } else {
-                throw new Error('DISPATCH_NAMESPACE not found in environment variables, cannot deploy without dispatch namespace');
-            }
-            
-            // Step 8: Determine deployment URL
-            const deployedUrl = `${this.getProtocolForHost()}://${projectName}.${getPreviewDomain(env)}`;
-            const deploymentId = projectName;
-            
-            this.logger.info('Deployment successful', { 
-                instanceId,
-                deployedUrl, 
-                deploymentId,
-                mode: 'dispatch-namespace'
+                    migrations: config.migrations,
+                    assetsConfig: config.assets,
+                    previewDomain: getPreviewDomain(env),
+                    protocol: this.getProtocolForHost(),
+                },
             });
-            
-            return {
-                success: true,
-                message: `Successfully deployed ${instanceId} using secure API deployment`,
-                deployedUrl,
-                deploymentId,
-                output: `Deployed`
-            };
+
+            this.logger.info('Deployment complete', {
+                instanceId,
+                deployedUrl: result.deployedUrl,
+                deploymentId: result.deploymentId,
+                target: target.id,
+            });
+
+            return result;
             
         } catch (error) {
             this.logger.error('deployToCloudflareWorkers', error, { instanceId });

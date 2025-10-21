@@ -4,6 +4,8 @@ import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from
 // Schema enum arrays derived from config types  
 const REASONING_EFFORT_VALUES = ['low', 'medium', 'high'] as const;
 const PROVIDER_OVERRIDE_VALUES = ['cloudflare', 'direct'] as const;
+const DEPLOYMENT_TARGET_VALUES = ['gcp-cloud-run', 'cloudflare-workers'] as const;
+const DEPLOYMENT_STATUS_VALUES = ['pending', 'deploying', 'active', 'failed', 'removed'] as const;
 
 // ========================================
 // CORE USER AND IDENTITY MANAGEMENT
@@ -320,6 +322,22 @@ export const appViews = sqliteTable('app_views', {
     appViewedAtIdx: index('app_views_app_viewed_at_idx').on(table.appId, table.viewedAt),
 }));
 
+export const appDeployments = sqliteTable('app_deployments', {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    appId: text('app_id').notNull().references(() => apps.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull().default(1),
+    target: text('target', { enum: DEPLOYMENT_TARGET_VALUES }).notNull(),
+    serviceUrl: text('service_url'),
+    status: text('status', { enum: DEPLOYMENT_STATUS_VALUES }).notNull().default('pending'),
+    metadata: text('metadata', { mode: 'json' }).default('{}'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+    appTargetVersionIdx: uniqueIndex('app_deployments_app_target_version_idx').on(table.appId, table.target, table.version),
+    appIdx: index('app_deployments_app_idx').on(table.appId),
+    targetIdx: index('app_deployments_target_idx').on(table.target),
+}));
+
 // ========================================
 // OAUTH AND EXTERNAL INTEGRATIONS
 // ========================================
@@ -627,3 +645,8 @@ export type NewStar = typeof stars.$inferInsert;
 
 export type RateLimitBucketRecord = typeof rateLimitBuckets.$inferSelect;
 export type NewRateLimitBucketRecord = typeof rateLimitBuckets.$inferInsert;
+
+export type AppDeployment = typeof appDeployments.$inferSelect;
+export type NewAppDeployment = typeof appDeployments.$inferInsert;
+export type AppDeploymentTarget = (typeof DEPLOYMENT_TARGET_VALUES)[number];
+export type AppDeploymentStatus = (typeof DEPLOYMENT_STATUS_VALUES)[number];

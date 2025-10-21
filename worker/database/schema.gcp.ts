@@ -17,6 +17,14 @@ import {
 // Schema enum arrays derived from config types
 const REASONING_EFFORT_VALUES = ['low', 'medium', 'high'] as const;
 const PROVIDER_OVERRIDE_VALUES = ['cloudflare', 'direct'] as const;
+const DEPLOYMENT_TARGET_VALUES = ['gcp-cloud-run', 'cloudflare-workers'] as const;
+const DEPLOYMENT_STATUS_VALUES = [
+	'pending',
+	'deploying',
+	'active',
+	'failed',
+	'removed',
+] as const;
 
 // ========================================
 // CORE USER AND IDENTITY MANAGEMENT
@@ -273,6 +281,41 @@ export const apps = pgTable(
 		),
 		createdAtIdx: index('apps_created_at_idx').on(table.createdAt),
 		updatedAtIdx: index('apps_updated_at_idx').on(table.updatedAt),
+	}),
+);
+
+export const appDeployments = pgTable(
+	'app_deployments',
+	{
+		id: serial('id').primaryKey(),
+		appId: text('app_id')
+			.notNull()
+			.references(() => apps.id, { onDelete: 'cascade' }),
+		version: integer('version').notNull().default(1),
+		target: text('target')
+			.$type<(typeof DEPLOYMENT_TARGET_VALUES)[number]>()
+			.notNull(),
+		serviceUrl: text('service_url'),
+		status: text('status')
+			.$type<(typeof DEPLOYMENT_STATUS_VALUES)[number]>()
+			.notNull()
+			.default('pending'),
+		metadata: jsonb('metadata')
+			.$type<Record<string, unknown>>()
+			.default(sql`'{}'::jsonb`),
+		createdAt: timestamp('created_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+	},
+	(table) => ({
+		appTargetVersionIdx: uniqueIndex(
+			'app_deployments_app_target_version_idx',
+		).on(table.appId, table.target, table.version),
+		appIdx: index('app_deployments_app_idx').on(table.appId),
+		targetIdx: index('app_deployments_target_idx').on(table.target),
 	}),
 );
 
@@ -931,3 +974,10 @@ export type NewStar = typeof stars.$inferInsert;
 
 export type RateLimitBucketRecord = typeof rateLimitBuckets.$inferSelect;
 export type NewRateLimitBucketRecord = typeof rateLimitBuckets.$inferInsert;
+
+export type AppDeployment = typeof appDeployments.$inferSelect;
+export type NewAppDeployment = typeof appDeployments.$inferInsert;
+export type AppDeploymentTarget =
+	(typeof DEPLOYMENT_TARGET_VALUES)[number];
+export type AppDeploymentStatus =
+	(typeof DEPLOYMENT_STATUS_VALUES)[number];

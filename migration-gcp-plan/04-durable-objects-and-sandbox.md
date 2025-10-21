@@ -17,12 +17,17 @@ Goal: Recreate the behaviour currently provided by Cloudflare Durable Objects (a
 ## Implementation Steps
 
 ### Step 1: Analyse Durable Object Interfaces
-- [ ] Map methods invoked on `CodeGeneratorAgent` (search in `worker/agents` for `.getStub` usage).
-- [ ] List data persisted via `ctx.storage` (inspect `SmartCodeGeneratorAgent` implementation).
-- [ ] Document expected concurrency semantics (single writer per session).
+- [x] Map methods invoked on `CodeGeneratorAgent` (search in `worker/agents` for `.getStub` usage).
+- [x] List data persisted via `ctx.storage` (inspect `SmartCodeGeneratorAgent` implementation).
+- [x] Document expected concurrency semantics (single writer per session).
+
+**Findings (2025-10-21)**
+- API surface: stubs created via `getAgentStub` call `initialize`, `isInitialized`, `getFullState`, `setState`, `deployToSandbox`, and `fetch` (for WebSocket upgrades). Cloning flows reuse `setState` to seed new sessions. Rate-limit consumers call `increment`, `getRemainingLimit`, and `resetLimit` on `DORateLimitStore`.
+- Persisted state: the `Agent` base class writes JSON payloads to `cf_agents_state` rows (`cf_state_row_id`, `cf_state_was_changed`) plus queue (`cf_agents_queues`), schedule (`cf_agents_schedules`), and MCP connection (`cf_agents_mcp_servers`) tables via `ctx.storage.sql`. `DORateLimitStore` stores a serialised map of buckets under the `state` key in Durable Object storage.
+- Concurrency: Durable Objects rely on single-threaded execution with `blockConcurrencyWhile` guarding startup and SQL mutations. State transitions go through `_setStateInternal`, ensuring sequential updates and broadcast ordering. Migration targets must preserve "single writer per session" semantics; Firestore transactions with retry jitter will be used to emulate this behaviour.
 
 ### Step 2: Create Adapter Pattern
-- [ ] Define `shared/platform/durableObjects/agentStore.ts` with interface:
+- [x] Define `shared/platform/durableObjects/agentStore.ts` with interface:
   ```ts
   export interface AgentStore {
     fetch(request: Request): Promise<Response>;
@@ -30,10 +35,10 @@ Goal: Recreate the behaviour currently provided by Cloudflare Durable Objects (a
     putSessionState(sessionId: string, state: AgentState): Promise<void>;
   }
   ```
-- [ ] Implement two adapters:
+- [x] Implement two adapters:
   - `cloudflareAgentStore` wrapping the existing Durable Object.
   - `gcpAgentStore` using Firestore (documents keyed by session ID) with transactions for atomic updates.
-- [ ] Update `worker/index.ts:19-83` to instantiate the correct adapter based on environment flag (e.g., `env.RUNTIME_PROVIDER`).
+- [x] Update `worker/index.ts:19-83` to instantiate the correct adapter based on environment flag (e.g., `env.RUNTIME_PROVIDER`).
 
 ### Step 3: Firestore Backing for Agent Sessions
 - [ ] Create Firestore collection `agentSessions` with TTL index for cleaning stale sessions.
@@ -78,4 +83,3 @@ Goal: Recreate the behaviour currently provided by Cloudflare Durable Objects (a
 ## Notes
 - Keep the adapters minimal; business logic should remain in existing services like `SmartCodeGeneratorAgent`.
 - If Firestore transaction latency becomes an issue, consider Cloud Spanner or AlloyDB in future iterations but avoid over-optimising now.
-

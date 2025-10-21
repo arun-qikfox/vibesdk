@@ -641,6 +641,18 @@ export class AppService extends BaseService {
             starCount: starCountResult?.count || 0
         };
     }
+    async getAppByDeploymentId(deploymentId: string) {
+        try {
+            const [app] = await this.database
+                .select()
+                .from(schema.apps)
+                .where(eq(schema.apps.deploymentId, deploymentId))
+                .limit(1);
+            return app;
+        } catch (error) {
+            return this.handleDatabaseError(error, 'getAppByDeploymentId', { deploymentId });
+        }
+    }
 
     /**
      * Record app view with duplicate prevention

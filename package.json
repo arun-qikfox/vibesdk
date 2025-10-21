@@ -11,6 +11,7 @@
 		"preview": "npm run build && vite preview",
 		"deploy": "bun --env-file .prod.vars scripts/deploy.ts",
 		"build:worker": "tsx scripts/build-worker.ts",
+		"cloudrun:context": "tsx scripts/create-cloudrun-context.ts",
 		"docker:build-workerd": "docker build -f container/Dockerfile.workerd -t vibesdk-workerd:latest .",
 		"cf-typegen": "wrangler types --include-runtime false",
 		"test": "vitest run",

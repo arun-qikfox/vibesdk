@@ -1,67 +1,68 @@
 # GCP-Based VibSDK Architecture (ASCII)
 
-```
-                                    ┌────────────────────────────────────────┐
-                                    │            Google Cloud SDK            │
-                                    │  (Developers / Ops via gcloud / Terraform)  │
-                                    └────────────────────────────────────────┘
-                                                   │
-                                                   │ terraform apply / kubectl
-                                                   ▼
-┌────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                │
-│  Google Cloud Platform (Project: qfxcloud-app-builder, Region: us-central1)    │
-│                                                                                │
-│  ┌──────────────────────────────┐      ┌──────────────────────────┐            │
-│  │ Artifact Registry            │      │ Secret Manager           │            │
-│  │  vibesdk / sandbox-job-runner│      │ (API keys, DB creds)     │            │
-│  └──────────────┬───────────────┘      └───────────────┬──────────┘            │
-│                 │                                     │                        │
-│                 │  image pulls                        │ secrets/creds          │
-│                 ▼                                     ▼                        │
-│  ┌──────────────────────────────┐      ┌──────────────────────────┐            │
-│  │ Cloud Run (Service)          │      │ Cloud Run (Job)          │            │
-│  │ vibesdk-control-plane        │      │ vibesdk-sandbox-job      │            │
-│  │ - hosts REST API (/api/…)    │      │ - pulls Pub/Sub messages │            │
-│  │ - publishes sandbox jobs     │      │ - runs sandbox tasks     │            │
-│  └──────────────┬───────────────┘      └───────┬───────────▲──────┘            │
-│                 │ Publish requests             │           │ tasks             │
-│                 ▼                              │           │                   │
-│  ┌──────────────────────────────┐      ┌───────▼───────────┴───────┐           │
-│  │ Pub/Sub Topic                │      │ Pub/Sub Subscription      │           │
-│  │ vibesdk-sandbox-requests     │─────▶│ vibesdk-sandbox-requests- │           │
-│  └──────────────────────────────┘      │ subscription               │           │
-│                                        └────────────────────────────┘           │
-│                                                   │ acknowledge                │
-│                                                   ▼                            │
-│                                        ┌──────────────────────────┐            │
-│                                        │ Firestore (Native mode)  │            │
-│                                        │ Collection: sandboxRuns  │            │
-│                                        │ - job writes status/logs │            │
-│                                        │ - control plane reads    │            │
-│                                        └──────────────────────────┘            │
-│                                                   │                            │
-│                                                   ▼                            │
-│                                        ┌──────────────────────────┐            │
-│                                        │ Google Cloud Storage     │            │
-│                                        │ Bucket: vibesdk-templates │           │
-│                                        │ - templates/assets       │            │
-│                                        └──────────────────────────┘            │
-│                                                                                │
-│  Other resources:                                                              │
-│    - Cloud SQL (managed via Terraform; used by control plane)                  │
-│    - VPC networking, VPC Access connector                                     │
-│    - IAM service accounts (runtime, job, CI)                                   │
-│    - Cloud Build triggers (optional)                                           │
-└────────────────────────────────────────────────────────────────────────────────┘
+## Platform Overview
 
 ```
+             +---------------------------+
+             |   Google Cloud SDK / CI   |
+             |  (gcloud, Terraform, CI)  |
+             +-------------+-------------+
+                           |
+                           v
++--------------------+      Pub/Sub topic      +-------------------------+
+| Control Plane API  | ----------------------> | Cloud Run Job           |
+| (Cloud Run)        |   vibesdk-sandbox-*     | vibesdk-sandbox-job     |
++--------------------+                         +-------------------------+
+        |                                               |
+        | publishes sandbox state                       | pulls messages
+        v                                               v
++--------------------+                         +-------------------------+
+| Firestore          |<------------------------| Google Cloud Storage    |
+| - sandboxRuns      |    writes status + logs | - templates & assets    |
+| - agentSessions    |                         +-------------------------+
++--------------------+
+        ^
+        |
+        | serves previews & state
+        v
+Control Plane Clients (UI, CLI)
 
-### Key:
+Supporting services (not shown to scale):
+- Artifact Registry: `us-central1-docker.pkg.dev/.../vibesdk/*`
+- Secret Manager: runtime secrets for Cloud Run service and sandbox job
+- VPC Connector & Cloud SQL: control plane persistence
+- Deployment target registry resolves `cloudflare-workers` (active) and `gcp-cloud-run` (stub) adapters for downstream deployment orchestration, defaulting to `gcp-cloud-run` when unset.
+```
 
-- **Control plane** publishes sandbox actions to Pub/Sub.
-- **Sandbox job** consumes messages, executes workloads, and writes results to Firestore (and optionally GCS).
-- **Firestore** persists job status for the control plane and UI to present back to users.
-- **Artifact Registry** hosts the job’s container image, built locally and pushed via Docker.
+## Durable Object Compatibility Layer
 
-Use this diagram alongside `docs/architecture-diagrams.md` to compare the original Cloudflare-based deployment with the GCP implementation.
+```
++--------------------+        +-------------------------+
+| Control Plane API  |  uses  | AgentStore factory      |
+| (Cloud Run)        |------->| (shared/platform/DO)    |
++--------------------+        +-----------+-------------+
+                                         |
+                                         v
++--------------------+        +-------------------------+
+| Firestore          |        | Firestore Sandbox Runs  |
+| agentSessions      |<-------| collection (`sandboxRuns`)|
+| (session payloads) |   job  | (status, logs, preview) |
++---------+----------+ writes +-------------------------+
+          |                                    ^
+          |                                    |
+          | rate-limit reads/writes            | sandbox job updates
+          v                                    |
++--------------------+                        |
+| Rate Limit Store   | (current: Durable      |
+| (DO buckets ->     |  Object `DORateLimit`) |
+|  future: Redis)    |                        |
++--------------------+                        |
+          ^                                    |
+          |                                    |
+          +------------------------------------+
+```
+
+The GCP implementation replaces Durable Objects with:
+- Firestore-backed session storage (`agentSessions`) using transactional writes to preserve single-writer semantics.
+- Pub/Sub + Cloud Run Jobs for asynchronous sandbox operations, with results persisted to `sandboxRuns`.
+- A forthcoming Memorystore/SQL-backed rate limiter to supplant `DORateLimitStore`.

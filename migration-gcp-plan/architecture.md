@@ -5,18 +5,20 @@ This document describes how the VibSDK control plane runs on Google Cloud Platfo
 ## High-Level Overview
 
 ```
-┌────────────┐        Pub/Sub         ┌────────────────┐        Firestore        ┌────────────────┐
-│  Control   │  publish sandbox job   │ Cloud Run Job  │   write sandbox run    │  Firestore     │
-│  Plane API │ ─────────────────────▶ │ vibesdk-sandbox│ ──────────────────────▶ │ sandboxRuns    │
-│ (Cloud Run │                        │ -job (GCP)     │                        │ collection     │
-└────┬───────┘                        └────────┬───────┘                        └────────────────┘
-     │                                      │
-     │                                      │
-     │                                      ▼
-     │                                Google Cloud Storage
-     │                                (templates & assets)
-     │
-     ▼
++--------------------+      Pub/Sub topic      +-------------------------+
+| Control Plane API  | ----------------------> | Cloud Run Job           |
+| (Cloud Run)        |   vibesdk-sandbox-*     | vibesdk-sandbox-job     |
++--------------------+                         +-------------------------+
+        |                                               |
+        |                                   reads templates / emits logs
+        v                                               v
++--------------------+                         +-------------------------+
+| Firestore          |<------------------------| Google Cloud Storage    |
+| (agentSessions,    |    run state + status   | (templates & assets)    |
+|  sandboxRuns)      |                         +-------------------------+
++--------------------+
+        |
+        v
 Control Plane Clients (UI, CLI)
 ```
 
@@ -27,7 +29,7 @@ Control Plane Clients (UI, CLI)
 | **Google Cloud Run (control plane)** | Hosts the main VibSDK API (`vibesdk-control-plane`). Handles user requests, orchestrates sandbox sessions, and exposes `/api/agent/*` routes. |
 | **Google Pub/Sub** | Topic `vibesdk-sandbox-requests` queues sandbox execution actions (create instance, run commands, etc.). |
 | **Cloud Run Job `vibesdk-sandbox-job`** | Stateless worker that dequeues Pub/Sub messages, executes sandbox tasks in the GCP environment, and records status/results. |
-| **Firestore (Native mode)** | Stores task status in the `sandboxRuns` collection. Control plane reads from here to respond to users. |
+| **Firestore (Native mode)** | Stores sandbox run status in `sandboxRuns` and Durable Object session state in `agentSessions` via the shared AgentStore. The control plane reads from both collections during request handling. |
 | **Google Cloud Storage `vibesdk-templates`** | Hosts template bundles and shared assets used by both the control plane and the sandbox job. |
 | **Secret Manager** | Provides database credentials and API tokens consumed by the control plane and the job. |
 | **VPC & Cloud SQL** | Support services (SQL database, connectors) used by the control plane; provided by Terraform but not directly touched by the sandbox job. |
@@ -37,7 +39,7 @@ Control Plane Clients (UI, CLI)
 1. **User triggers sandbox work** via the control plane (`POST /api/agent`). The API publishes a message to the Pub/Sub topic.
 2. **Cloud Run Job execution** (`vibesdk-sandbox-job`) is executed manually or via scheduler/Eventarc. The job:
    - Pulls a message from the subscription.
-   - Marks the corresponding document in Firestore (`sandboxRuns/{sessionId}`) as `running`.
+   - Marks the corresponding document in Firestore (`sandboxRuns/{sessionId}`) as `running` and updates session metadata in `agentSessions/{sessionId}` through the AgentStore when applicable.
    - Performs sandbox work (stubbed for now) and writes the final status to Firestore.
    - Acknowledges the Pub/Sub message.
 3. **Control plane reads status** on subsequent API calls (e.g., `/api/agent/:id/preview`). When Firestore reports `succeeded`, the UI can display the preview details.
@@ -66,8 +68,8 @@ All infrastructure is managed by `infra/gcp`:
 ## Notes & Future Enhancements
 
 * Replace the remaining Cloudflare-specific imports in shared modules with GCP-friendly adapters so the job no longer needs stubs.
+* Multi-cloud deployment uses a target registry (`cloudflare-workers`, `gcp-cloud-run`) backed by `shared/platform/deployment`. Cloudflare deploys are routed through the new interface; the registry now defaults to the GCP stub until the Cloud Run build pipeline lands.
 * Add Cloud Scheduler/Eventarc trigger so the job runs automatically when Pub/Sub messages arrive.
 * Implement real sandbox orchestration (instead of the stub that marks runs as succeeded).
 * Harden authentication/authorization between control plane and job (use dedicated service accounts and principle-of-least-privilege IAM bindings).
 * Add monitoring dashboards and alerts in Cloud Monitoring once the runtime is stable.
-

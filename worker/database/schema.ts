@@ -33,6 +33,7 @@ const {
 	userModelProviders,
 	systemSettings,
 	rateLimitBuckets,
+	appDeployments,
 } = schema;
 
 export {
@@ -58,6 +59,7 @@ export {
 	userModelProviders,
 	systemSettings,
 	rateLimitBuckets,
+	appDeployments,
 };
 
 export type DatabaseSchema = typeof schema;
@@ -105,4 +107,8 @@ export type {
 	NewSystemSetting,
 	RateLimitBucketRecord,
 	NewRateLimitBucketRecord,
+	AppDeployment,
+	NewAppDeployment,
+	AppDeploymentTarget,
+	AppDeploymentStatus,
 } from './schema.sqlite';

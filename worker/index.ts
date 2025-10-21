@@ -16,6 +16,10 @@ import {
 } from 'shared/platform/storage';
 import { ensureSecrets } from './utils/secretLoader';
 import { createAgentStore } from 'shared/platform/durableObjects';
+import { AppService } from './database/services/AppService';
+import { DeploymentService } from './database/services/DeploymentService';
+import type { AppDeploymentStatus } from './database/schema';
+import type { DatabaseRuntimeEnv } from './database/runtime/types';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
@@ -103,6 +107,120 @@ async function serveAssetFromObjectStore(request: Request, env: Env): Promise<Re
 		}
 	}
 	return null;
+}
+
+function mapDeploymentStatusToHttp(
+	status: AppDeploymentStatus,
+): { status: number; message: string } {
+	switch (status) {
+		case 'deploying':
+		case 'pending':
+			return { status: 202, message: 'Deployment is still in progress.' };
+		case 'failed':
+			return {
+				status: 502,
+				message: 'Latest deployment failed. Please redeploy the application.',
+			};
+		case 'removed':
+			return {
+				status: 404,
+				message: 'This application preview is no longer available.',
+			};
+		default:
+			return {
+				status: 503,
+				message: 'Deployment metadata is incomplete. Please redeploy the application.',
+			};
+	}
+}
+
+async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Response> {
+	const previewDomain = getPreviewDomain(env);
+	const url = new URL(request.url);
+	const { hostname } = url;
+
+	if (!previewDomain || !hostname.endsWith(`.${previewDomain}`)) {
+		logger.warn('Attempted Cloud Run preview access with mismatched domain', {
+			hostname,
+			previewDomain,
+		});
+		return new Response('Preview environment not found.', { status: 404 });
+	}
+
+	const deploymentKey = hostname.slice(0, hostname.length - previewDomain.length - 1);
+	if (!deploymentKey) {
+		return new Response('Preview environment not found.', { status: 404 });
+	}
+
+	const dbEnv = env as unknown as DatabaseRuntimeEnv;
+	const appService = new AppService(dbEnv);
+	const app = await appService.getAppByDeploymentId(deploymentKey);
+
+	if (!app) {
+		logger.info('No app matched deployment key for Cloud Run request', { deploymentKey });
+		return new Response('Application not found.', { status: 404 });
+	}
+
+	const deploymentService = new DeploymentService(dbEnv);
+	const deployment = await deploymentService.getLatestDeployment(app.id, 'gcp-cloud-run');
+
+	if (!deployment) {
+		logger.info('No Cloud Run deployment record found', { appId: app.id, deploymentKey });
+		return new Response('Application has not been deployed to Cloud Run yet.', { status: 404 });
+	}
+
+	if (!deployment.serviceUrl || deployment.status !== 'active') {
+		const { status, message } = mapDeploymentStatusToHttp(deployment.status);
+		return new Response(message, { status });
+	}
+
+	let targetBase: URL;
+	try {
+		targetBase = new URL(deployment.serviceUrl);
+	} catch (error) {
+		logger.error('Invalid Cloud Run service URL', {
+			serviceUrl: deployment.serviceUrl,
+			error,
+		});
+		return new Response('Invalid Cloud Run deployment configuration.', { status: 500 });
+	}
+
+	const proxiedUrl = new URL(url.pathname + url.search, targetBase);
+	const clonedRequest = request.clone();
+	const headers = new Headers(clonedRequest.headers);
+	headers.delete('host');
+	headers.delete('Host');
+
+	const fetchInit: RequestInit = {
+		method: clonedRequest.method,
+		headers,
+		redirect: 'manual',
+	};
+
+	if (!['GET', 'HEAD'].includes(clonedRequest.method.toUpperCase())) {
+		fetchInit.body = clonedRequest.body;
+	}
+
+	try {
+		const proxiedResponse = await fetch(proxiedUrl.toString(), fetchInit);
+		let responseHeaders = new Headers(proxiedResponse.headers);
+		responseHeaders.set('X-Preview-Type', 'cloud-run');
+		responseHeaders = setOriginControl(env, request, responseHeaders);
+		responseHeaders.append('Vary', 'Origin');
+		responseHeaders.set('Access-Control-Expose-Headers', 'X-Preview-Type');
+
+		return new Response(proxiedResponse.body, {
+			status: proxiedResponse.status,
+			statusText: proxiedResponse.statusText,
+			headers: responseHeaders,
+		});
+	} catch (error) {
+		logger.error('Failed to proxy request to Cloud Run service', {
+			error,
+			proxiedUrl: proxiedUrl.toString(),
+		});
+		return new Response('Error contacting Cloud Run service.', { status: 502 });
+	}
 }
 
 /**

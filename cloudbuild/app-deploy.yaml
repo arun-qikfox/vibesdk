@@ -1,0 +1,70 @@
+# Cloud Build configuration for packaging a VibSDK-generated app and deploying to Cloud Run.
+# Expected substitutions (provide via --substitutions or Cloud Build trigger):
+#   _SERVICE_NAME     - Cloud Run service name (e.g., app-myapp-123)
+#   _REGION           - Cloud Run region (defaults to us-central1)
+#   _CONTEXT_TAR      - Path to the Docker context tar.gz (produced by create-cloudrun-context script)
+#   PROJECT_ID        - Inherited; Cloud Build project ID
+#   LOCATION          - Artifact Registry location (defaults to $_REGION)
+#
+# Example invocation:
+#   gcloud builds submit \
+#     --config cloudbuild/app-deploy.yaml \
+#     --substitutions=_SERVICE_NAME=myapp,_CONTEXT_TAR=cloudrun-context.tar.gz,_REGION=us-central1
+
+options:
+  substitutionOption: ALLOW_LOOSE
+
+substitutions:
+  _REGION: us-central1
+  _LOCATION: us-central1
+  _SERVICE_NAME: vibesdk-generated-app
+  _CONTEXT_TAR: cloudrun-context.tar.gz
+  _REPOSITORY: vibesdk-apps
+
+steps:
+  # Unpack the pre-built Docker context (app source + template Dockerfile).
+  - name: gcr.io/cloud-builders/gsutil
+    entrypoint: bash
+    args:
+      - -eu
+      - -c
+      - |
+        if [[ "${_CONTEXT_TAR}" == gs://* ]]; then
+          gsutil cp "${_CONTEXT_TAR}" context.tar.gz
+        else
+          cp "${_CONTEXT_TAR}" context.tar.gz
+        fi
+        mkdir -p context
+        tar -xzf context.tar.gz -C context
+
+  # Build the application image.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--file'
+      - context/Dockerfile
+      - '--tag'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - context
+
+  # Push image to Artifact Registry.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
+
+  # Deploy to Cloud Run.
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - '--region=${_REGION}'
+      - '--image=${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=8080'
+
+images:
+  - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
