@@ -65,6 +65,8 @@ module "storage" {
   runtime_service_accounts = {
     runtime = module.iam.runtime_service_account_email
   }
+
+  ci_service_account_email = module.iam.ci_service_account_email
 }
 
 module "sandbox" {
@@ -119,4 +121,85 @@ module "runtime" {
       }
     }
   )
+}
+
+# --- Add: resolve project number and Cloud Build SA email
+data "google_project" "this" {
+  project_id = local.project_id
+}
+
+locals {
+  cloudbuild_sa = "${data.google_project.this.number}@cloudbuild.gserviceaccount.com"
+}
+
+# --- Add: required service APIs
+resource "google_project_service" "run" {
+  project = local.project_id
+  service = "run.googleapis.com"
+}
+
+resource "google_project_service" "cloudbuild" {
+  project = local.project_id
+  service = "cloudbuild.googleapis.com"
+}
+
+resource "google_project_service" "artifactregistry" {
+  project = local.project_id
+  service = "artifactregistry.googleapis.com"
+}
+
+# --- Add: Cloud Build can manage Cloud Run services
+resource "google_project_iam_member" "cb_run_developer" {
+  project = local.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${local.cloudbuild_sa}"
+
+  depends_on = [
+    google_project_service.run,
+    google_project_service.cloudbuild
+  ]
+}
+
+# --- Add: Cloud Build may deploy a service that runs as your runtime SA
+resource "google_service_account_iam_member" "cb_act_as_runtime_sa" {
+  service_account_id = "projects/${local.project_id}/serviceAccounts/${module.iam.runtime_service_account_email}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${local.cloudbuild_sa}"
+}
+
+# --- Add: Cloud Build SA can PUSH to each repo you define via var.artifact_registry_repositories
+resource "google_artifact_registry_repository_iam_member" "cb_repo_writer" {
+  for_each   = toset(var.artifact_registry_repositories)
+  project    = local.project_id
+  location   = local.region
+  repository = each.key
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${local.cloudbuild_sa}"
+
+  depends_on = [google_project_service.artifactregistry]
+}
+
+# --- Add: runtime SA can PULL from those repos
+resource "google_artifact_registry_repository_iam_member" "runtime_repo_reader" {
+  for_each   = toset(var.artifact_registry_repositories)
+  project    = local.project_id
+  location   = local.region
+  repository = each.key
+  role       = "roles/artifactregistry.reader"
+  member     = "serviceAccount:${module.iam.runtime_service_account_email}"
+
+  depends_on = [google_project_service.artifactregistry]
+}
+
+# --- Add: avoid 403 on Cloud Build's source bucket gs://<project>_cloudbuild
+resource "google_storage_bucket_iam_member" "cb_source_viewer" {
+  bucket = "${local.project_id}_cloudbuild"
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${local.cloudbuild_sa}"
+}
+
+resource "google_storage_bucket_iam_member" "cb_source_creator" {
+  bucket = "${local.project_id}_cloudbuild"
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${local.cloudbuild_sa}"
 }

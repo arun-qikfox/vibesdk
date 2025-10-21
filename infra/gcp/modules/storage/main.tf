@@ -30,10 +30,40 @@ resource "google_storage_bucket" "templates" {
   labels = var.labels
 }
 
+resource "google_storage_bucket" "deployment_contexts" {
+  name                        = "${var.bucket_name}-contexts"
+  project                     = var.project_id
+  location                    = var.location
+  uniform_bucket_level_access = true
+  force_destroy               = var.force_destroy
+
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      age = 30 # Delete old deployment contexts after 30 days
+    }
+  }
+
+  labels = merge(var.labels, {
+    purpose = "deployment-contexts"
+  })
+}
+
 resource "google_storage_bucket_iam_member" "runtime_access" {
   for_each = var.runtime_service_accounts
 
   bucket = google_storage_bucket.templates.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${each.value}"
+}
+
+# Grant Cloud Build access to deployment contexts bucket
+resource "google_storage_bucket_iam_member" "cloudbuild_deployment_contexts" {
+  count = var.ci_service_account_email != "" ? 1 : 0
+
+  bucket = google_storage_bucket.deployment_contexts.name
+  role   = "roles/storage.admin"
+  member = "serviceAccount:${var.ci_service_account_email}"
 }

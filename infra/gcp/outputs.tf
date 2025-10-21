@@ -69,6 +69,14 @@ output "templates_bucket" {
   }
 }
 
+output "deployment_contexts_bucket" {
+  description = "Information about the deployment contexts storage bucket."
+  value = {
+    name = module.storage.deployment_contexts_bucket_name
+    url  = module.storage.deployment_contexts_bucket_url
+  }
+}
+
 output "runtime_service" {
   description = "Details of the Cloud Run control plane service."
   value = {

@@ -226,41 +226,36 @@ async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Resp
 /**
  * Handles requests for user-deployed applications on subdomains.
  * It first attempts to proxy to a live development sandbox. If that fails,
- * it dispatches the request to a permanently deployed worker via namespaces.
+ * it checks for Cloud Run deployments first, then falls back to Cloudflare Workers dispatch.
  * This function will NOT fall back to the main worker.
  *
  * @param request The incoming Request object.
  * @param env The environment bindings.
- * @returns A Response object from the sandbox, the dispatched worker, or an error.
+ * @returns A Response object from the sandbox, Cloud Run, dispatched worker, or an error.
  */
 async function handleUserAppRequest(request: Request, env: Env, runtimeProvider: RuntimeProvider): Promise<Response> {
 	const url = new URL(request.url);
 	const { hostname } = url;
 	logger.info(`Handling user app request for: ${hostname}`);
 
-	if (runtimeProvider !== 'cloudflare') {
-		logger.warn(`Sandbox preview requested on ${runtimeProvider} runtime. Returning not implemented.`);
-		return new Response('Sandbox preview is not yet available on this runtime.', { status: 501 });
-	}
-
 	// 1. Attempt to proxy to a live development sandbox.
 	// proxyToSandbox doesn't consume the request body on a miss, so no clone is needed here.
 	const sandboxResponse = await proxyToSandbox(request, env);
 	if (sandboxResponse) {
 		logger.info(`Serving response from sandbox for: ${hostname}`);
-		
+
 		// Add headers to identify this as a sandbox response
 		let headers = new Headers(sandboxResponse.headers);
-		
-        if (sandboxResponse.status === 500) {
-            headers.set('X-Preview-Type', 'sandbox-error');
-        } else {
-            headers.set('X-Preview-Type', 'sandbox');
-        }
-        headers = setOriginControl(env, request, headers);
-        headers.append('Vary', 'Origin');
+
+		if (sandboxResponse.status === 500) {
+			headers.set('X-Preview-Type', 'sandbox-error');
+		} else {
+			headers.set('X-Preview-Type', 'sandbox');
+		}
+		headers = setOriginControl(env, request, headers);
+		headers.append('Vary', 'Origin');
 		headers.set('Access-Control-Expose-Headers', 'X-Preview-Type');
-		
+
 		return new Response(sandboxResponse.body, {
 			status: sandboxResponse.status,
 			statusText: sandboxResponse.statusText,
@@ -268,8 +263,22 @@ async function handleUserAppRequest(request: Request, env: Env, runtimeProvider:
 		});
 	}
 
-	// 2. If sandbox misses, attempt to dispatch to a deployed worker.
-	logger.info(`Sandbox miss for ${hostname}, attempting dispatch to permanent worker.`);
+	// 2. Check if this is a Cloud Run preview request (multi-cloud support)
+	const previewDomain = getPreviewDomain(env);
+	if (previewDomain && hostname.endsWith(`.${previewDomain}`)) {
+		try {
+			const cloudRunResponse = await proxyCloudRunAppRequest(request, env);
+			logger.info(`Routing to Cloud Run deployment for: ${hostname}`);
+			return cloudRunResponse;
+		} catch (error) {
+			logger.warn(`Cloud Run routing failed for ${hostname}, falling back to dispatcher`, error);
+			// Continue to dispatcher fallback
+		}
+	}
+
+	// 3. If sandbox misses and Cloud Run is not available/applicable, attempt to dispatch to a deployed worker.
+	// This maintains backwards compatibility with existing Cloudflare deployments.
+	logger.info(`Sandbox and Cloud Run miss for ${hostname}, attempting dispatch to permanent worker.`);
 	if (!isDispatcherAvailable(env)) {
 		logger.warn(`Dispatcher not available, cannot serve: ${hostname}`);
 		return new Response('This application is not currently available.', { status: 404 });
@@ -282,15 +291,15 @@ async function handleUserAppRequest(request: Request, env: Env, runtimeProvider:
 	try {
 		const worker = dispatcher.get(appName);
 		const dispatcherResponse = await worker.fetch(request);
-		
+
 		// Add headers to identify this as a dispatcher response
 		let headers = new Headers(dispatcherResponse.headers);
-		
+
 		headers.set('X-Preview-Type', 'dispatcher');
-        headers = setOriginControl(env, request, headers);
-        headers.append('Vary', 'Origin');
+		headers = setOriginControl(env, request, headers);
+		headers.append('Vary', 'Origin');
 		headers.set('Access-Control-Expose-Headers', 'X-Preview-Type');
-		
+
 		return new Response(dispatcherResponse.body, {
 			status: dispatcherResponse.status,
 			statusText: dispatcherResponse.statusText,

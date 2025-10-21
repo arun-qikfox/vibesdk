@@ -49,3 +49,9 @@ variable "runtime_service_accounts" {
   type        = map(string)
   default     = {}
 }
+
+variable "ci_service_account_email" {
+  description = "CI/CD service account email that needs access to deployment contexts bucket."
+  type        = string
+  default     = ""
+}

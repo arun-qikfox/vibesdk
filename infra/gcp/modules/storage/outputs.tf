@@ -12,3 +12,13 @@ output "bucket_url" {
   description = "Public URL to access the storage bucket."
   value       = "gs://${google_storage_bucket.templates.name}"
 }
+
+output "deployment_contexts_bucket_name" {
+  description = "Name of the deployment contexts storage bucket."
+  value       = google_storage_bucket.deployment_contexts.name
+}
+
+output "deployment_contexts_bucket_url" {
+  description = "Public URL to access the deployment contexts storage bucket."
+  value       = "gs://${google_storage_bucket.deployment_contexts.name}"
+}
