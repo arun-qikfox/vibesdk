@@ -6,7 +6,6 @@
 import { createDatabaseService, DatabaseService } from '../database';
 import { SQL, and } from 'drizzle-orm';
 import { createLogger } from '../../logger';
-import type { DatabaseRuntimeEnv } from '../runtime/types';
 
 /**
  * Base class for all database domain services
@@ -15,8 +14,8 @@ import type { DatabaseRuntimeEnv } from '../runtime/types';
 export abstract class BaseService {
     protected logger = createLogger(this.constructor.name);
     protected db: DatabaseService;
-    protected env: DatabaseRuntimeEnv;
-    constructor(env: DatabaseRuntimeEnv) {
+    protected env: Env;
+    constructor(env: Env) {
         this.db = createDatabaseService(env);
         this.env = env;
     }

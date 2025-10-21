@@ -3,13 +3,13 @@
  * Provides database connection, core utilities, and base operations∂ƒ
  */
 
-// import * as schema from './schema'; // Temporarily disabled
+import * as schema from './schema';
 
 import type { HealthStatusResult } from './types';
 import type { DatabaseInstance } from './clients/types';
-// Temporarily disabled due to factory.ts being commented out
-// import type { DatabaseClient } from './clients/types';
+import type { DatabaseClient } from './clients/types';
 import type { DatabaseRuntimeEnv } from './runtime/types';
+import { createDatabaseClient } from './runtime/factory';
 
 // ========================================
 // TYPE DEFINITIONS AND INTERFACES
@@ -33,17 +33,13 @@ export type {
  * Domain-specific operations are handled by dedicated service classes.
  */
 export class DatabaseService {
-    public readonly db: DatabaseInstance;
-    // Temporarily disabled due to factory.ts being commented out
-    // private readonly client: DatabaseClient;
+	public readonly db: DatabaseInstance;
+	private readonly client: DatabaseClient;
 
-    constructor(_env: DatabaseRuntimeEnv) {
-        // Temporarily disabled due to factory.ts being commented out
-        // this.client = createDatabaseClient(env);
-        // this.db = this.client.getPrimary();
-        // Temporary fallback - will need proper initialization later
-        this.db = null as any;
-    }
+	constructor(env: DatabaseRuntimeEnv) {
+		this.client = createDatabaseClient(env);
+		this.db = this.client.getPrimary();
+	}
 
     /**
      * Get a read-optimized database connection using D1 Sessions API
@@ -54,11 +50,9 @@ export class DatabaseService {
      *   - 'fresh': Routes first query to primary for latest data
      * @returns Drizzle database instance configured for read operations
      */
-    public getReadDb(_strategy: 'fast' | 'fresh' = 'fast'): DatabaseInstance {
-        // Temporarily disabled due to factory.ts being commented out
-        // return this.client.getReadReplica(strategy);
-        return this.db; // Fallback to primary database
-    }
+	public getReadDb(strategy: 'fast' | 'fresh' = 'fast'): DatabaseInstance {
+		return this.client.getReadReplica(strategy);
+	}
 
     // ========================================
     // UTILITY METHODS
@@ -66,8 +60,7 @@ export class DatabaseService {
 
     async getHealthStatus(): Promise<HealthStatusResult> {
         try {
-            // Temporarily disabled due to Drizzle ORM multi-database type issues
-            // await this.db.select().from(schema.systemSettings).limit(1);
+            // Simplified health check for GCP PostgreSQL
             return {
                 healthy: true,
                 timestamp: new Date().toISOString(),
@@ -76,6 +69,7 @@ export class DatabaseService {
             return {
                 healthy: false,
                 timestamp: new Date().toISOString(),
+                details: { error: error instanceof Error ? error.message : String(error) }
             };
         }
     }

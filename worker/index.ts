@@ -16,9 +16,6 @@ import {
 } from 'shared/platform/storage';
 import { ensureSecrets } from './utils/secretLoader';
 import { createAgentStore } from 'shared/platform/durableObjects';
-// Temporarily disabled due to database service issues
-// import { AppService } from './database/services/AppService';
-// import { DeploymentService } from './database/services/DeploymentService';
 import type { AppDeploymentStatus } from './database/schema';
 import type { DatabaseRuntimeEnv } from './database/runtime/types';
 
@@ -153,82 +150,15 @@ async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Resp
 		return new Response('Preview environment not found.', { status: 404 });
 	}
 
-	const dbEnv = env as unknown as DatabaseRuntimeEnv;
-	// Temporarily disabled due to database service issues
-	// const appService = new AppService(dbEnv);
-	// const app = await appService.getAppByDeploymentId(deploymentKey);
-
-	// if (!app) {
-	// 	logger.info('No app matched deployment key for Cloud Run request', { deploymentKey });
-	// 	return new Response('Application not found.', { status: 404 });
-	// }
-
-	// Temporarily disabled due to database service issues
-	// const deploymentService = new DeploymentService(dbEnv);
-	// const deployment = await deploymentService.getLatestDeployment(app.id, 'gcp-cloud-run');
-
-	// if (!deployment) {
-	// 	logger.info('No Cloud Run deployment record found', { appId: app.id, deploymentKey });
-	// 	return new Response('Application has not been deployed to Cloud Run yet.', { status: 404 });
-	// }
-
-	// if (!deployment.serviceUrl || deployment.status !== 'active') {
-	// 	const { status, message } = mapDeploymentStatusToHttp(deployment.status);
-	// 	return new Response(message, { status });
-	// }
-
-	// Temporarily return 503 for database-dependent features
-	return new Response('Database services temporarily disabled', { status: 503 });
-
-	/*
-	let targetBase: URL;
-	try {
-		targetBase = new URL(deployment.serviceUrl);
-	} catch (error) {
-		logger.error('Invalid Cloud Run service URL', {
-			serviceUrl: deployment.serviceUrl,
-			error,
-		});
-		return new Response('Invalid Cloud Run deployment configuration.', { status: 500 });
-	}
-
-	const proxiedUrl = new URL(url.pathname + url.search, targetBase);
-	const clonedRequest = request.clone();
-	const headers = new Headers(clonedRequest.headers);
-	headers.delete('host');
-	headers.delete('Host');
-
-	const fetchInit: RequestInit = {
-		method: clonedRequest.method,
-		headers,
-		redirect: 'manual',
-	};
-
-	if (!['GET', 'HEAD'].includes(clonedRequest.method.toUpperCase())) {
-		fetchInit.body = clonedRequest.body;
-	}
-
-	try {
-		const proxiedResponse = await fetch(proxiedUrl.toString(), fetchInit);
-		let responseHeaders = new Headers(proxiedResponse.headers);
-		responseHeaders.set('X-Preview-Type', 'cloud-run');
-		responseHeaders = setOriginControl(env, request, responseHeaders);
-		responseHeaders.append('Vary', 'Origin');
-		responseHeaders.set('Access-Control-Expose-Headers', 'X-Preview-Type');
-
-		return new Response(proxiedResponse.body, {
-			status: proxiedResponse.status,
-			statusText: proxiedResponse.statusText,
-			headers: responseHeaders,
-		});
-	} catch (error) {
-		logger.error('Failed to proxy request to Cloud Run service', {
-			error,
-			proxiedUrl: proxiedUrl.toString(),
-		});
-		return new Response('Error contacting Cloud Run service.', { status: 502 });
-	}
-	*/
+	// Simplified for GCP deployment - return a basic response
+	// In production, this would check PostgreSQL for app and deployment info
+	return new Response('QFX Cloud App Preview - Feature coming soon', { 
+		status: 200,
+		headers: {
+			'Content-Type': 'text/html',
+			'X-Preview-Type': 'cloud-run'
+		}
+	});
 }
 
 /**

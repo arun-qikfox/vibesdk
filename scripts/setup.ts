@@ -324,8 +324,7 @@ class SetupManager {
 
 		const finalDomain = customDomain || 'localhost:5173';
 
-		console.log('
-☁️  Runtime Provider & GCP Configuration');
+		console.log('☁️  Runtime Provider & GCP Configuration');
         const runtimeDefault = (this.existingConfig.RUNTIME_PROVIDER || 'gcp').toLowerCase();
         const runtimeInput = await this.promptWithDefault('Default runtime provider (cloudflare/gcp): ', runtimeDefault);
         const normalizedRuntime = runtimeInput.trim().toLowerCase() === 'gcp' ? 'gcp' : 'cloudflare';
