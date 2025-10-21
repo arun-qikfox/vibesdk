@@ -7,7 +7,7 @@ import { createApp } from './app';
 // import { sentryOptions } from './observability/sentry';
 import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/DORateLimitStore';
 import { getPreviewDomain } from './utils/urls';
-import { proxyToAiGateway } from './services/aigateway-proxy/controller';
+// import { proxyToAiGateway } from './services/aigateway-proxy/controller';
 import { isOriginAllowed } from './config/security';
 import { getRuntimeProvider, RuntimeProvider } from 'shared/platform/runtimeProvider';
 import {
@@ -16,8 +16,9 @@ import {
 } from 'shared/platform/storage';
 import { ensureSecrets } from './utils/secretLoader';
 import { createAgentStore } from 'shared/platform/durableObjects';
-import { AppService } from './database/services/AppService';
-import { DeploymentService } from './database/services/DeploymentService';
+// Temporarily disabled due to database service issues
+// import { AppService } from './database/services/AppService';
+// import { DeploymentService } from './database/services/DeploymentService';
 import type { AppDeploymentStatus } from './database/schema';
 import type { DatabaseRuntimeEnv } from './database/runtime/types';
 
@@ -153,27 +154,33 @@ async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Resp
 	}
 
 	const dbEnv = env as unknown as DatabaseRuntimeEnv;
-	const appService = new AppService(dbEnv);
-	const app = await appService.getAppByDeploymentId(deploymentKey);
+	// Temporarily disabled due to database service issues
+	// const appService = new AppService(dbEnv);
+	// const app = await appService.getAppByDeploymentId(deploymentKey);
 
-	if (!app) {
-		logger.info('No app matched deployment key for Cloud Run request', { deploymentKey });
-		return new Response('Application not found.', { status: 404 });
-	}
+	// if (!app) {
+	// 	logger.info('No app matched deployment key for Cloud Run request', { deploymentKey });
+	// 	return new Response('Application not found.', { status: 404 });
+	// }
 
-	const deploymentService = new DeploymentService(dbEnv);
-	const deployment = await deploymentService.getLatestDeployment(app.id, 'gcp-cloud-run');
+	// Temporarily disabled due to database service issues
+	// const deploymentService = new DeploymentService(dbEnv);
+	// const deployment = await deploymentService.getLatestDeployment(app.id, 'gcp-cloud-run');
 
-	if (!deployment) {
-		logger.info('No Cloud Run deployment record found', { appId: app.id, deploymentKey });
-		return new Response('Application has not been deployed to Cloud Run yet.', { status: 404 });
-	}
+	// if (!deployment) {
+	// 	logger.info('No Cloud Run deployment record found', { appId: app.id, deploymentKey });
+	// 	return new Response('Application has not been deployed to Cloud Run yet.', { status: 404 });
+	// }
 
-	if (!deployment.serviceUrl || deployment.status !== 'active') {
-		const { status, message } = mapDeploymentStatusToHttp(deployment.status);
-		return new Response(message, { status });
-	}
+	// if (!deployment.serviceUrl || deployment.status !== 'active') {
+	// 	const { status, message } = mapDeploymentStatusToHttp(deployment.status);
+	// 	return new Response(message, { status });
+	// }
 
+	// Temporarily return 503 for database-dependent features
+	return new Response('Database services temporarily disabled', { status: 503 });
+
+	/*
 	let targetBase: URL;
 	try {
 		targetBase = new URL(deployment.serviceUrl);
@@ -221,6 +228,7 @@ async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Resp
 		});
 		return new Response('Error contacting Cloud Run service.', { status: 502 });
 	}
+	*/
 }
 
 /**
@@ -233,7 +241,7 @@ async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Resp
  * @param env The environment bindings.
  * @returns A Response object from the sandbox, Cloud Run, dispatched worker, or an error.
  */
-async function handleUserAppRequest(request: Request, env: Env, runtimeProvider: RuntimeProvider): Promise<Response> {
+async function handleUserAppRequest(request: Request, env: Env, _runtimeProvider: RuntimeProvider): Promise<Response> {
 	const url = new URL(request.url);
 	const { hostname } = url;
 	logger.info(`Handling user app request for: ${hostname}`);
@@ -346,8 +354,19 @@ const worker = {
 		// 1. Critical configuration check: Ensure custom domain is set.
         const previewDomain = getPreviewDomain(env);
 		if (!previewDomain || previewDomain.trim() === '') {
-			logger.error('FATAL: env.CUSTOM_DOMAIN is not configured in wrangler.toml or the Cloudflare dashboard.');
-			return new Response('Server configuration error: Application domain is not set.', { status: 500 });
+			// For Cloud Run, use the hostname as the domain
+			const url = new URL(request.url);
+			const hostname = url.hostname;
+			
+			// If it's a Cloud Run URL, use it as the domain
+			if (hostname.endsWith('.run.app')) {
+				logger.info(`Using Cloud Run hostname as domain: ${hostname}`);
+				// Set a mock preview domain for Cloud Run
+				(env as any).CUSTOM_DOMAIN = hostname;
+			} else {
+				logger.error('FATAL: env.CUSTOM_DOMAIN is not configured and not a Cloud Run URL.');
+				return new Response('Server configuration error: Application domain is not set.', { status: 500 });
+			}
 		}
 
 		const url = new URL(request.url);
@@ -362,48 +381,37 @@ const worker = {
 		// --- Domain-based Routing ---
 
 		// Normalize hostnames for both local development (localhost) and production.
+		// Handle Cloud Run URLs (e.g., *.run.app) as main domain requests
+		const isCloudRunUrl = hostname.endsWith('.run.app');
 		const isMainDomainRequest =
-			hostname === env.CUSTOM_DOMAIN || hostname === 'localhost';
+			hostname === env.CUSTOM_DOMAIN || 
+			hostname === 'localhost' ||
+			isCloudRunUrl;
 		const isSubdomainRequest =
 			hostname.endsWith(`.${previewDomain}`) ||
 			(hostname.endsWith('.localhost') && hostname !== 'localhost');
 
 		// Route 1: Main Platform Request (e.g., build.cloudflare.dev or localhost)
 		if (isMainDomainRequest) {
-			// Serve static assets for all non-API routes from the object store in GCP,
+			// Handle API requests and root/health endpoints
+			if (pathname.startsWith('/api/') || pathname === '/' || pathname === '/health') {
+				const app = createApp(env);
+				return app.fetch(request, env, ctx);
+			}
+			
+			// Serve static assets for all other routes from the object store in GCP,
 			// falling back to the legacy ASSETS binding when available.
-			if (!pathname.startsWith('/api/')) {
-				if (runtimeProvider === 'gcp') {
-					const assetResponse = await serveAssetFromObjectStore(request, env);
-					if (assetResponse) {
-						return assetResponse;
-					}
-					logger.warn(`Asset not found in GCS for path: ${pathname}, falling back to legacy binding.`);
+			if (runtimeProvider === 'gcp') {
+				const assetResponse = await serveAssetFromObjectStore(request, env);
+				if (assetResponse) {
+					return assetResponse;
 				}
-				if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
-					return env.ASSETS.fetch(request);
-				}
-				return new Response('Not Found', { status: 404 });
+				logger.warn(`Asset not found in GCS for path: ${pathname}, falling back to legacy binding.`);
 			}
-			// AI Gateway proxy for generated apps
-			if (pathname.startsWith('/api/proxy/openai')) {
-                // Only handle requests from valid origins of the preview domain
-                const origin = request.headers.get('Origin');
-                const previewDomain = getPreviewDomain(env);
-
-                logger.info(`Origin: ${origin}, Preview Domain: ${previewDomain}`);
-                
-                return proxyToAiGateway(request, env, ctx);
-				// if (origin && origin.endsWith(`.${previewDomain}`)) {
-                //     return proxyToAiGateway(request, env, ctx);
-                // }
-                // logger.warn(`Access denied. Invalid origin: ${origin}, preview domain: ${previewDomain}`);
-                // return new Response('Access denied. Invalid origin.', { status: 403 });
+			if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+				return env.ASSETS.fetch(request);
 			}
-			// Handle all API requests with the main Hono application.
-			logger.info(`Handling API request for: ${url}`);
-			const app = createApp(env);
-			return app.fetch(request, env, ctx);
+			return new Response('Not Found', { status: 404 });
 		}
 
 		// Route 2: User App Request (e.g., xyz.build.cloudflare.dev or test.localhost)

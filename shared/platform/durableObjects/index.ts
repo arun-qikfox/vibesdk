@@ -1,4 +1,4 @@
-import { registerAgentStore, createAgentStore } from './agentStore';
+import { registerAgentStore, createAgentStore, type AgentStore } from './agentStore';
 import { createCloudflareAgentStore } from './cloudflareAgentStore';
 import { createGcpAgentStore } from './gcpAgentStore';
 
@@ -12,4 +12,4 @@ registerAgentStore('cloudflare', (env) => {
 
 registerAgentStore('gcp', (env) => createGcpAgentStore(env));
 
-export { createAgentStore };
+export { createAgentStore, type AgentStore };

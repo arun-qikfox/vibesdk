@@ -138,7 +138,7 @@ export class SandboxSdkClient extends BaseSandboxService {
 
     private getSandbox(): SandboxType {
         if (!this.sandbox) {
-            this.sandbox = getSandbox(env.Sandbox, this.sandboxId);
+            this.sandbox = getSandbox(env.Sandbox as any, this.sandboxId) as any;
         }
         return this.sandbox;
     }
@@ -1950,14 +1950,14 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             const dispatchNamespace = env.DISPATCH_NAMESPACE as string;
 
-            const target = getDeploymentTarget(env, 'cloudflare-workers');
+            const target = getDeploymentTarget(env as any, 'cloudflare-workers');
             this.logger.info('Deploying to Cloudflare via deployment target', {
                 target: target.id,
                 dispatchNamespace,
             });
 
             const result = await target.deploy({
-                env,
+                env: env as any,
                 instanceId,
                 projectName,
                 payload: {
@@ -2227,7 +2227,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
 
             // Delegate to secure GitHub service
-            const result = await GitHubService.pushFilesToRepository(files, request, {
+            const result = await GitHubService.pushFilesToRepository(files as any, request, {
                 localCommits: finalGitContext.localCommits,
                 hasUncommittedChanges: finalGitContext.hasUncommittedChanges
             });

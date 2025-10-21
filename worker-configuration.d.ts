@@ -58,6 +58,9 @@ declare namespace Cloudflare {
 	}
 }
 interface Env extends Cloudflare.Env {}
+declare global {
+	interface Env extends Cloudflare.Env {}
+}
 type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };

@@ -16,7 +16,11 @@ export class FileManager implements IFileManager {
 
     getTemplateFile(path: string): { filePath: string; fileContents: string } | null {
         const state = this.stateManager.getState();
-        return state.templateDetails?.files?.find(file => file.filePath === path) || null;
+        const file = state.templateDetails?.files?.find(file => file.filePath === path);
+        if (file && file.filePath && file.fileContents) {
+            return { filePath: file.filePath, fileContents: file.fileContents };
+        }
+        return null;
     }
 
     getGeneratedFile(path: string): FileOutputType | null {

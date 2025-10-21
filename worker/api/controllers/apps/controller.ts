@@ -1,3 +1,5 @@
+// Temporarily disabled due to database service issues
+/*
 import { AppService } from '../../../database/services/AppService';
 import type { AppSortOption, SortOrder, TimePeriod, Visibility } from '../../../database/types';
 import { formatRelativeTime } from '../../../utils/timeFormatter';
@@ -23,14 +25,16 @@ export class AppController extends BaseController {
         try {
             const user = context.user!;
             
-            const appService = new AppService(env);
-            const userApps = await appService.getUserAppsWithFavorites(user.id);
+            // Temporarily disabled due to database service issues
+            // const appService = new AppService(env);
+            // const userApps = await appService.getUserAppsWithFavorites(user.id);
 
-            const responseData: AppsListData = {
-                apps: userApps // Already properly typed and formatted by DatabaseService
-            };
+            // const responseData: AppsListData = {
+            //     apps: userApps // Already properly typed and formatted by DatabaseService
+            // };
 
-            return AppController.createSuccessResponse(responseData);
+            // return AppController.createSuccessResponse(responseData);
+            return AppController.createErrorResponse<AppsListData>('Feature temporarily disabled', 503);
         } catch (error) {
             this.logger.error('Error fetching user apps:', error);
             return AppController.createErrorResponse<AppsListData>('Failed to fetch apps', 500);
@@ -254,5 +258,36 @@ export class AppController extends BaseController {
             this.logger.error('Error deleting app:', error);
             return AppController.createErrorResponse<AppDeleteData>('Failed to delete app', 500);
         }
+    }
+}
+*/
+
+// Temporary placeholder to prevent import errors
+import type { RouteContext } from '../../types/route-context';
+
+export class AppController {
+    static async getUserApps(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getRecentApps(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getFavoriteApps(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async toggleFavorite(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getPublicApps(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getApp(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async updateAppVisibility(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async deleteApp(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
     }
 }

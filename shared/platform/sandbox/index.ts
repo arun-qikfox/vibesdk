@@ -1,3 +1,4 @@
+import type { Env } from '../../../worker/types/env';
 import type { ExecuteResponse, LogEvent, Sandbox } from '@cloudflare/sandbox';
 import { getRuntimeProvider } from 'shared/platform/runtimeProvider';
 import { createCloudflareSandbox } from './cloudflareSandbox';

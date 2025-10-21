@@ -2,10 +2,12 @@
  * Route Authentication Middleware
  */
 
+import type { Env } from '../../types/env';
 import { createMiddleware } from 'hono/factory';
 import { AuthUser } from '../../types/auth-types';
 import { createLogger } from '../../logger';
-import { AppService } from '../../database';
+// Temporarily disabled due to database service issues
+// import { AppService } from '../../database';
 import { authMiddleware } from './auth';
 import { RateLimitService } from '../../services/rate-limit/rateLimits';
 import { errorResponse } from '../../api/responses';
@@ -232,9 +234,11 @@ export async function checkAppOwnership(user: AuthUser, params: Record<string, s
             return false;
         }
 
-        const appService = new AppService(env);
-        const ownershipResult = await appService.checkAppOwnership(agentId, user.id);
-        return ownershipResult.isOwner;
+        // Temporarily disabled due to database service issues
+        // const appService = new AppService(env);
+        // const ownershipResult = await appService.checkAppOwnership(agentId, user.id);
+        // return ownershipResult.isOwner;
+        return false; // Temporarily deny all ownership checks
     } catch (error) {
         logger.error('Error checking app ownership', error);
         return false;

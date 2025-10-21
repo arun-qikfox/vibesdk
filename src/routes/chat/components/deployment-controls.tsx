@@ -279,7 +279,7 @@ export function DeploymentControls({
 							) : (
 								<>
 									<Zap className="w-4 h-4 mr-2" />
-									Deploy to Cloudflare
+									Deploy to QFX Cloud
 								</>
 							)}
 						</Button>

@@ -6,7 +6,8 @@ import { getAgentStub, getTemplateForQuery } from '../../../agents';
 import { AgentConnectionData, AgentPreviewResponse, CodeGenArgs } from './types';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
-import { ModelConfigService } from '../../../database';
+// Temporarily disabled due to database service issues
+// import { ModelConfigService } from '../../../database';
 import { ModelConfig } from '../../../agents/inferutils/config.types';
 import { RateLimitService } from '../../../services/rate-limit/rateLimits';
 import { validateWebSocketOrigin } from '../../../middleware/security/websocket';
@@ -75,28 +76,34 @@ export class CodingAgentController extends BaseController {
             }
 
             const agentId = generateId();
-            const modelConfigService = new ModelConfigService(env);
+            // Temporarily disabled due to database service issues
+            // const modelConfigService = new ModelConfigService(env);
                                 
             // Fetch all user model configs, api keys and agent instance at once
-            const [userConfigsRecord, agentInstance] = await Promise.all([
-                modelConfigService.getUserModelConfigs(user.id),
-                getAgentStub(env, agentId, false, this.logger)
-            ]);
+            // Temporarily disabled due to database service issues
+            // const [userConfigsRecord, agentInstance] = await Promise.all([
+            //     modelConfigService.getUserModelConfigs(user.id),
+            //     getAgentStub(env, agentId, false, this.logger)
+            // ]);
+            
+            // Use default configs for now
+            const agentInstance = await getAgentStub(env, agentId, false, this.logger);
                                 
             // Convert Record to Map and extract only ModelConfig properties
             const userModelConfigs = new Map();
-            for (const [actionKey, mergedConfig] of Object.entries(userConfigsRecord)) {
-                if (mergedConfig.isUserOverride) {
-                    const modelConfig: ModelConfig = {
-                        name: mergedConfig.name,
-                        max_tokens: mergedConfig.max_tokens,
-                        temperature: mergedConfig.temperature,
-                        reasoning_effort: mergedConfig.reasoning_effort,
-                        fallbackModel: mergedConfig.fallbackModel
-                    };
-                    userModelConfigs.set(actionKey, modelConfig);
-                }
-            }
+            // Temporarily disabled due to database service issues
+            // for (const [actionKey, mergedConfig] of Object.entries(userConfigsRecord)) {
+            //     if (mergedConfig.isUserOverride) {
+            //         const modelConfig: ModelConfig = {
+            //             name: mergedConfig.name,
+            //             max_tokens: mergedConfig.max_tokens,
+            //             temperature: mergedConfig.temperature,
+            //             reasoning_effort: mergedConfig.reasoning_effort,
+            //             fallbackModel: mergedConfig.fallbackModel
+            //         };
+            //         userModelConfigs.set(actionKey, modelConfig);
+            //     }
+            // }
 
             const inferenceContext = {
                 userModelConfigs: Object.fromEntries(userModelConfigs),

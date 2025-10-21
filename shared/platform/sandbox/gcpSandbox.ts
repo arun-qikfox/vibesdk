@@ -258,14 +258,16 @@ export function createGcpSandboxExecutor(env?: EnvLike): SandboxExecutor {
 				return publishResult;
 			}
 
-			const jobResult = await triggerSandboxJob(env, request, publishResult.messageId);
+			// Type assertion since we know it has messageId when success is true
+			const messageId = (publishResult as { success: true; messageId: string }).messageId;
+			const jobResult = await triggerSandboxJob(env, request, messageId);
 			if (!jobResult.success) {
 				return jobResult;
 			}
 
 			return {
 				success: true,
-				logs: `Published sandbox request ${publishResult.messageId} and triggered job.`,
+				logs: `Published sandbox request ${messageId} and triggered job.`,
 			};
 		},
 	};

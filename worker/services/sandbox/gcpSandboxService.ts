@@ -38,8 +38,8 @@ export class GcpSandboxService extends BaseSandboxService {
 		super(sessionId);
 		this.env = env;
 		this.agentId = agentId;
-		this.executor = getSandboxExecutor(env);
-		this.store = new FirestoreSandboxRunStore(env);
+		this.executor = getSandboxExecutor(env as any);
+		this.store = new FirestoreSandboxRunStore(env as any);
 
 		this.logger.setFields({
 			provider: 'gcp',
@@ -125,7 +125,7 @@ export class GcpSandboxService extends BaseSandboxService {
 
 	async getTemplateDetails(templateName: string): Promise<TemplateDetailsResponse> {
 		await this.dispatch('getTemplateDetails', { templateName });
-		return this.operationUnavailable<TemplateDetailsResponse>('getTemplateDetails');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async createInstance(
@@ -159,12 +159,12 @@ export class GcpSandboxService extends BaseSandboxService {
 
 	async listAllInstances(): Promise<ListInstancesResponse> {
 		await this.dispatch('listAllInstances');
-		return this.operationUnavailable<ListInstancesResponse>('listAllInstances');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async getInstanceDetails(instanceId: string): Promise<GetInstanceResponse> {
 		await this.dispatch('getInstanceDetails', { instanceId });
-		return this.operationUnavailable<GetInstanceResponse>('getInstanceDetails');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async getInstanceStatus(instanceId: string): Promise<BootstrapStatusResponse> {
@@ -242,7 +242,7 @@ export class GcpSandboxService extends BaseSandboxService {
 		commitMessage?: string,
 	): Promise<WriteFilesResponse> {
 		await this.dispatch('writeFiles', { instanceId, files, commitMessage });
-		return this.operationUnavailable<WriteFilesResponse>('writeFiles');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async getFiles(
@@ -257,7 +257,7 @@ export class GcpSandboxService extends BaseSandboxService {
 			isTemplate,
 			redactedFiles,
 		});
-		return this.operationUnavailable<GetFilesResponse>('getFiles');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async executeCommands(
@@ -266,17 +266,17 @@ export class GcpSandboxService extends BaseSandboxService {
 		timeout?: number,
 	): Promise<ExecuteCommandsResponse> {
 		await this.dispatch('executeCommands', { instanceId, commands, timeout });
-		return this.operationUnavailable<ExecuteCommandsResponse>('executeCommands');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async getInstanceErrors(instanceId: string): Promise<RuntimeErrorResponse> {
 		await this.dispatch('getInstanceErrors', { instanceId });
-		return this.operationUnavailable<RuntimeErrorResponse>('getInstanceErrors');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async clearInstanceErrors(instanceId: string): Promise<ClearErrorsResponse> {
 		await this.dispatch('clearInstanceErrors', { instanceId });
-		return this.operationUnavailable<ClearErrorsResponse>('clearInstanceErrors');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async runStaticAnalysisCode(
@@ -284,7 +284,7 @@ export class GcpSandboxService extends BaseSandboxService {
 		lintFiles?: string[],
 	): Promise<StaticAnalysisResponse> {
 		await this.dispatch('runStaticAnalysisCode', { instanceId, lintFiles });
-		return this.operationUnavailable<StaticAnalysisResponse>('runStaticAnalysisCode');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async deployInstance(
@@ -293,7 +293,7 @@ export class GcpSandboxService extends BaseSandboxService {
 		options: Record<string, unknown>,
 	): Promise<DeploymentResult> {
 		await this.dispatch('deployInstance', { instanceId, target, options });
-		return this.operationUnavailable<DeploymentResult>('deployInstance');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 	async getLogs(instanceId: string): Promise<GetLogsResponse> {
@@ -322,12 +322,12 @@ export class GcpSandboxService extends BaseSandboxService {
 
 	async clearLogs(instanceId: string): Promise<GetLogsResponse> {
 		await this.dispatch('clearLogs', { instanceId });
-		return this.operationUnavailable<GetLogsResponse>('clearLogs');
+		return { success: false, error: 'Operation unavailable' };
 	}
 
 async deployToCloudflareWorkers(instanceId: string): Promise<DeploymentResult> {
 	await this.dispatch('deployToCloudflareWorkers', { instanceId });
-	return this.operationUnavailable<DeploymentResult>('deployToCloudflareWorkers');
+	return { success: false, error: 'Operation unavailable' };
 }
 
 async pushToGitHub(
@@ -336,7 +336,7 @@ async pushToGitHub(
 	files: FileOutputType[],
 ): Promise<GitHubPushResponse> {
 	await this.dispatch('pushToGitHub', { instanceId, request, files });
-	return this.operationUnavailable<GitHubPushResponse>('pushToGitHub');
+	return { success: false, error: 'Operation unavailable' };
 }
 
 }

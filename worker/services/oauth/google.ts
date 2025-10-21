@@ -3,6 +3,7 @@
  * Implements Google OAuth 2.0 authentication
  */
 
+import type { Env } from '../../types/env';
 import { BaseOAuthProvider } from './base';
 import type { OAuthUserInfo } from '../../types/auth-types';
 import { OAuthProvider } from '../../types/auth-types';

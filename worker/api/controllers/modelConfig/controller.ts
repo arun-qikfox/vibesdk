@@ -1,8 +1,5 @@
-/**
- * Model Configuration Controller
- * Handles CRUD operations for user model configurations
- */
-
+// Temporarily disabled due to database service issues
+/*
 import { BaseController } from '../baseController';
 import { RouteContext } from '../../types/route-context';
 import { ApiResponse, ControllerResponse } from '../types';
@@ -14,376 +11,387 @@ import {
     ModelConfig
 } from '../../../agents/inferutils/config.types';
 import { AGENT_CONFIG } from '../../../agents/inferutils/config';
-import {
-    ModelConfigsData,
+import { createLogger } from '../../../logger';
+import { 
     ModelConfigData,
     ModelConfigUpdateData,
-    ModelConfigTestData,
-    ModelConfigResetData,
-    ModelConfigDefaultsData,
     ModelConfigDeleteData,
-    ByokProvidersData
+    ModelTestData,
+    ModelTestResultData,
+    SecretData,
+    SecretCreateData,
+    SecretUpdateData,
+    SecretDeleteData
 } from './types';
-import { 
-    getUserProviderStatus, 
-    getByokModels,
-    getPlatformAvailableModels,
-    validateModelAccessForEnvironment
-} from './byokHelper';
-import { z } from 'zod';
-import { createLogger } from '../../../logger';
-
-// Validation schemas
-const modelConfigUpdateSchema = z.object({
-    modelName: z.string().min(1).max(100).nullable().optional(),
-    maxTokens: z.number().min(1).max(200000).nullable().optional(),
-    temperature: z.number().min(0).max(2).nullable().optional(),
-    reasoningEffort: z.enum(['low', 'medium', 'high']).nullable().optional(),
-    providerOverride: z.enum(['cloudflare', 'direct']).nullable().optional(),
-    fallbackModel: z.string().min(1).max(100).nullable().optional(),
-    isUserOverride: z.boolean().optional()
-});
-
-const modelTestSchema = z.object({
-    agentActionName: z.string(),
-    testPrompt: z.string().optional(),
-    useUserKeys: z.boolean().default(true),
-    tempConfig: modelConfigUpdateSchema.optional()
-});
 
 export class ModelConfigController extends BaseController {
     static logger = createLogger('ModelConfigController');
-    /**
-     * Get all model configurations for the current user
-     * GET /api/model-configs
-     */
-    static async getModelConfigs(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigsData>>> {
+
+    static async getModelConfigs(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigData>>> {
         try {
             const user = context.user!;
+
             const modelConfigService = new ModelConfigService(env);
-            const configs = await modelConfigService.getUserModelConfigs(user.id);
-            const defaults = modelConfigService.getDefaultConfigs();
+            const userConfigs = await modelConfigService.getUserModelConfigs(user.id);
 
-            const responseData: ModelConfigsData = {
-                configs,
-                defaults,
-                message: 'Model configurations retrieved successfully'
-            };
+            const agents = Object.entries(AGENT_CONFIG).map(([key, config]) => ({
+                key,
+                name: config.name,
+                description: config.description
+            }));
 
-            return ModelConfigController.createSuccessResponse(responseData);
-        } catch (error) {
-            this.logger.error('Error getting model configurations:', error);
-            return ModelConfigController.createErrorResponse<ModelConfigsData>('Failed to get model configurations', 500);
-        }
-    }
+            const userConfigsRecord: Record<string, any> = {};
+            const defaultConfigs: Record<string, any> = {};
 
-    /**
-     * Get a specific model configuration
-     * GET /api/model-configs/:agentAction
-     */
-    static async getModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigData>>> {
-        try {
-            const user = context.user!;
-
-            const url = new URL(request.url);
-            const agentAction = url.pathname.split('/').pop() as AgentActionKey;
-
-            if (!agentAction || !(agentAction in AGENT_CONFIG)) {
-                return ModelConfigController.createErrorResponse<ModelConfigData>('Invalid agent action name', 400);
+            for (const [actionKey, mergedConfig] of Object.entries(userConfigs)) {
+                if (mergedConfig.isUserOverride) {
+                    userConfigsRecord[actionKey] = {
+                        name: mergedConfig.name,
+                        max_tokens: mergedConfig.max_tokens,
+                        temperature: mergedConfig.temperature,
+                        reasoning_effort: mergedConfig.reasoning_effort,
+                        fallbackModel: mergedConfig.fallbackModel,
+                        isUserOverride: true
+                    };
+                }
+                
+                const defaultConfig = AGENT_CONFIG[actionKey as AgentActionKey];
+                if (defaultConfig) {
+                    defaultConfigs[actionKey] = {
+                        name: defaultConfig.name,
+                        max_tokens: defaultConfig.max_tokens,
+                        temperature: defaultConfig.temperature,
+                        reasoning_effort: defaultConfig.reasoning_effort,
+                        fallbackModel: defaultConfig.fallbackModel
+                    };
+                }
             }
-            const modelConfigService = new ModelConfigService(env);
-
-            const config = await modelConfigService.getUserModelConfig(user.id, agentAction);
-            const defaultConfig = modelConfigService.getDefaultConfigs()[agentAction];
 
             const responseData: ModelConfigData = {
-                config,
-                defaultConfig,
-                message: 'Model configuration retrieved successfully'
+                agents,
+                userConfigs: userConfigsRecord,
+                defaultConfigs
             };
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting model configuration:', error);
-            return ModelConfigController.createErrorResponse<ModelConfigData>('Failed to get model configuration', 500);
+            this.logger.error('Error fetching model configs:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigData>('Failed to fetch model configurations', 500);
         }
     }
 
-    /**
-     * Update a specific model configuration
-     * PUT /api/model-configs/:agentAction
-     */
     static async updateModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigUpdateData>>> {
         try {
             const user = context.user!;
-
-            const url = new URL(request.url);
-            const agentAction = url.pathname.split('/').pop() as AgentActionKey;
-
-            if (!agentAction || !(agentAction in AGENT_CONFIG)) {
-                return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Invalid agent action name', 400);
-            }
 
             const bodyResult = await ModelConfigController.parseJsonBody(request);
             if (!bodyResult.success) {
                 return bodyResult.response! as ControllerResponse<ApiResponse<ModelConfigUpdateData>>;
             }
 
-            const validatedData = modelConfigUpdateSchema.parse(bodyResult.data);
+            const { actionKey, config } = bodyResult.data as { 
+                actionKey?: string; 
+                config?: ModelConfig; 
+            };
 
-            // Convert to ModelConfig format - only include non-null values
-            const modelConfig: Partial<ModelConfig> = {};
-            
-            if (validatedData.modelName !== null && validatedData.modelName !== undefined) {
-                modelConfig.name = validatedData.modelName;
-            }
-            if (validatedData.maxTokens !== null && validatedData.maxTokens !== undefined) {
-                modelConfig.max_tokens = validatedData.maxTokens;
-            }
-            if (validatedData.temperature !== null && validatedData.temperature !== undefined) {
-                modelConfig.temperature = validatedData.temperature;
-            }
-            if (validatedData.reasoningEffort !== null && validatedData.reasoningEffort !== undefined) {
-                modelConfig.reasoning_effort = validatedData.reasoningEffort;
-            }
-            if (validatedData.fallbackModel !== null && validatedData.fallbackModel !== undefined) {
-                modelConfig.fallbackModel = validatedData.fallbackModel;
+            if (!actionKey || !config) {
+                return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Action key and config are required', 400);
             }
 
-            // Validate model access based on environment configuration and user BYOK status
-            if (modelConfig.name || modelConfig.fallbackModel) {
-                const userProviderStatus = await getUserProviderStatus(user.id, env);
-                
-                // Validate primary model
-                if (modelConfig.name) {
-                    const isValidAccess = validateModelAccessForEnvironment(
-                        modelConfig.name, 
-                        env, 
-                        userProviderStatus
-                    );
-                    
-                    if (!isValidAccess) {
-                        const provider = modelConfig.name.split('/')[0];
-                        return ModelConfigController.createErrorResponse<ModelConfigUpdateData>(
-                            `Model requires API key for provider '${provider}'. Please add your API key in the BYOK settings or contact your platform administrator.`,
-                            403
-                        );
-                    }
-                }
-
-                // Validate fallback model
-                if (modelConfig.fallbackModel) {
-                    const isValidAccess = validateModelAccessForEnvironment(
-                        modelConfig.fallbackModel,
-                        env,
-                        userProviderStatus
-                    );
-                    
-                    if (!isValidAccess) {
-                        const provider = modelConfig.fallbackModel.split('/')[0];
-                        return ModelConfigController.createErrorResponse<ModelConfigUpdateData>(
-                            `Fallback model requires API key for provider '${provider}'. Please add your API key in the BYOK settings or contact your platform administrator.`,
-                            403
-                        );
-                    }
-                }
+            if (!Object.keys(AGENT_CONFIG).includes(actionKey)) {
+                return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Invalid action key', 400);
             }
 
             const modelConfigService = new ModelConfigService(env);
-            const updatedConfig = await modelConfigService.upsertUserModelConfig(
-                user.id,
-                agentAction,
-                modelConfig
-            );
+            const result = await modelConfigService.updateUserModelConfig(user.id, actionKey as AgentActionKey, config);
+
+            if (!result.success) {
+                return ModelConfigController.createErrorResponse<ModelConfigUpdateData>(result.error || 'Failed to update model configuration', 500);
+            }
 
             const responseData: ModelConfigUpdateData = {
-                config: updatedConfig,
+                actionKey: actionKey as AgentActionKey,
+                config: result.config!,
                 message: 'Model configuration updated successfully'
             };
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            if (error instanceof z.ZodError) {
-                return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Validation failed: ' + JSON.stringify(error.errors), 400);
-            }
-            this.logger.error('Error updating model configuration:', error);
+            this.logger.error('Error updating model config:', error);
             return ModelConfigController.createErrorResponse<ModelConfigUpdateData>('Failed to update model configuration', 500);
         }
     }
 
-    /**
-     * Delete/reset a model configuration to default
-     * DELETE /api/model-configs/:agentAction
-     */
     static async deleteModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigDeleteData>>> {
-        try {
-            const user = context.user!;
-
-            const url = new URL(request.url);
-            const agentAction = url.pathname.split('/').pop() as AgentActionKey;
-
-            if (!agentAction || !(agentAction in AGENT_CONFIG)) {
-                return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Invalid agent action name', 400);
-            }
-
-            const modelConfigService = new ModelConfigService(env);
-            const deleted = await modelConfigService.deleteUserModelConfig(user.id, agentAction);
-
-            if (!deleted) {
-                return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Configuration not found or already using defaults', 404);
-            }
-
-            const responseData: ModelConfigDeleteData = {
-                message: 'Model configuration reset to default successfully'
-            };
-
-            return ModelConfigController.createSuccessResponse(responseData);
-        } catch (error) {
-            this.logger.error('Error deleting model configuration:', error);
-            return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Failed to delete model configuration', 500);
-        }
-    }
-
-    /**
-     * Test a model configuration
-     * POST /api/model-configs/test
-     */
-    static async testModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigTestData>>> {
         try {
             const user = context.user!;
 
             const bodyResult = await ModelConfigController.parseJsonBody(request);
             if (!bodyResult.success) {
-                return bodyResult.response! as ControllerResponse<ApiResponse<ModelConfigTestData>>;
+                return bodyResult.response! as ControllerResponse<ApiResponse<ModelConfigDeleteData>>;
             }
 
-            const validatedData = modelTestSchema.parse(bodyResult.data);
-            const agentAction = validatedData.agentActionName as AgentActionKey;
+            const { actionKey } = bodyResult.data as { actionKey?: string };
 
-            if (!(agentAction in AGENT_CONFIG)) {
-                return ModelConfigController.createErrorResponse<ModelConfigTestData>('Invalid agent action name', 400);
+            if (!actionKey) {
+                return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Action key is required', 400);
+            }
+
+            if (!Object.keys(AGENT_CONFIG).includes(actionKey)) {
+                return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Invalid action key', 400);
             }
 
             const modelConfigService = new ModelConfigService(env);
-            const secretsService = new SecretsService(env);
+            const result = await modelConfigService.deleteUserModelConfig(user.id, actionKey as AgentActionKey);
+
+            if (!result.success) {
+                return ModelConfigController.createErrorResponse<ModelConfigDeleteData>(result.error || 'Failed to delete model configuration', 500);
+            }
+
+            const responseData: ModelConfigDeleteData = {
+                actionKey: actionKey as AgentActionKey,
+                message: 'Model configuration reset to default'
+            };
+
+            return ModelConfigController.createSuccessResponse(responseData);
+        } catch (error) {
+            this.logger.error('Error deleting model config:', error);
+            return ModelConfigController.createErrorResponse<ModelConfigDeleteData>('Failed to delete model configuration', 500);
+        }
+    }
+
+    static async testModelConfig(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelTestResultData>>> {
+        try {
+            const user = context.user!;
+
+            const bodyResult = await ModelConfigController.parseJsonBody(request);
+            if (!bodyResult.success) {
+                return bodyResult.response! as ControllerResponse<ApiResponse<ModelTestResultData>>;
+            }
+
+            const { actionKey, config, testPrompt } = bodyResult.data as { 
+                actionKey?: string; 
+                config?: ModelConfig; 
+                testPrompt?: string;
+            };
+
+            if (!actionKey || !config || !testPrompt) {
+                return ModelConfigController.createErrorResponse<ModelTestResultData>('Action key, config, and test prompt are required', 400);
+            }
+
+            if (!Object.keys(AGENT_CONFIG).includes(actionKey)) {
+                return ModelConfigController.createErrorResponse<ModelTestResultData>('Invalid action key', 400);
+            }
+
             const modelTestService = new ModelTestService(env);
+            const result = await modelTestService.testModelConfiguration(user.id, actionKey as AgentActionKey, config, testPrompt);
 
-            // Get base configuration and merge with temporary changes if provided
-            const baseConfig = await modelConfigService.getUserModelConfig(user.id, agentAction);
-            
-            const configToTest: ModelConfig = validatedData.tempConfig ? {
-                ...baseConfig,
-                // Map frontend field names to backend config structure
-                ...(validatedData.tempConfig.modelName != null && { name: validatedData.tempConfig.modelName }),
-                ...(validatedData.tempConfig.maxTokens != null && { max_tokens: validatedData.tempConfig.maxTokens }),
-                ...(validatedData.tempConfig.temperature != null && { temperature: validatedData.tempConfig.temperature }),
-                ...(validatedData.tempConfig.reasoningEffort != null && { reasoning_effort: validatedData.tempConfig.reasoningEffort }),
-                ...(validatedData.tempConfig.fallbackModel != null && { fallbackModel: validatedData.tempConfig.fallbackModel }),
-                ...(validatedData.tempConfig.providerOverride != null && { providerOverride: validatedData.tempConfig.providerOverride })
-            } : baseConfig;
-
-            // Get user API keys if requested
-            let userApiKeys: Record<string, string> | undefined;
-            if (validatedData.useUserKeys) {
-                const userApiKeysMap = await secretsService.getUserBYOKKeysMap(user.id);
-                userApiKeys = Object.fromEntries(userApiKeysMap);
+            if (!result.success) {
+                return ModelConfigController.createErrorResponse<ModelTestResultData>(result.error || 'Model test failed', 500);
             }
 
-            // Test the configuration
-            const testResult = await modelTestService.testModelConfig({
-                modelConfig: configToTest,
-                userApiKeys,
-                testPrompt: validatedData.testPrompt
-            });
-
-            const responseData: ModelConfigTestData = {
-                testResult,
-                message: testResult.success 
-                    ? 'Model configuration test successful' 
-                    : 'Model configuration test failed'
+            const responseData: ModelTestResultData = {
+                actionKey: actionKey as AgentActionKey,
+                config,
+                testPrompt,
+                result: result.result!,
+                timestamp: result.timestamp!
             };
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            if (error instanceof z.ZodError) {
-                return ModelConfigController.createErrorResponse<ModelConfigTestData>('Validation failed: ' + JSON.stringify(error.errors), 400);
-            }
-            this.logger.error('Error testing model configuration:', error);
-            return ModelConfigController.createErrorResponse<ModelConfigTestData>('Failed to test model configuration', 500);
+            this.logger.error('Error testing model config:', error);
+            return ModelConfigController.createErrorResponse<ModelTestResultData>('Failed to test model configuration', 500);
         }
     }
 
-    /**
-     * Reset all model configurations to defaults
-     * POST /api/model-configs/reset-all
-     */
-    static async resetAllConfigs(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ModelConfigResetData>>> {
+    static async getSecrets(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretData>>> {
         try {
             const user = context.user!;
 
-            const modelConfigService = new ModelConfigService(env);
-            const resetCount = await modelConfigService.resetAllUserConfigs(user.id);
+            const secretsService = new SecretsService(env);
+            const secrets = await secretsService.getUserSecrets(user.id);
 
-            const responseData: ModelConfigResetData = {
-                resetCount,
-                message: `${resetCount} model configurations reset to defaults`
+            const responseData: SecretData = {
+                secrets: secrets.map(secret => ({
+                    id: secret.id,
+                    name: secret.name,
+                    provider: secret.provider,
+                    createdAt: secret.createdAt,
+                    updatedAt: secret.updatedAt
+                }))
             };
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error resetting all model configurations:', error);
-            return ModelConfigController.createErrorResponse<ModelConfigResetData>('Failed to reset model configurations', 500);
+            this.logger.error('Error fetching secrets:', error);
+            return ModelConfigController.createErrorResponse<SecretData>('Failed to fetch secrets', 500);
         }
     }
 
-    /**
-     * Get default configurations
-     * GET /api/model-configs/defaults
-     */
-    static async getDefaults(_request: Request, env: Env, _ctx: ExecutionContext): Promise<ControllerResponse<ApiResponse<ModelConfigDefaultsData>>> {
-        try {
-            const modelConfigService = new ModelConfigService(env);
-            const defaults = modelConfigService.getDefaultConfigs();
-            
-            const responseData: ModelConfigDefaultsData = {
-                defaults,
-                message: 'Default configurations retrieved successfully'
-            };
-
-            return ModelConfigController.createSuccessResponse(responseData);
-        } catch (error) {
-            this.logger.error('Error getting default configurations:', error);
-            return ModelConfigController.createErrorResponse<ModelConfigDefaultsData>('Failed to get default configurations', 500);
-        }
-    }
-
-    /**
-     * Get BYOK providers and available models
-     * GET /api/model-configs/byok-providers
-     */
-    static async getByokProviders(_request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ByokProvidersData>>> {
+    static async createSecret(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretCreateData>>> {
         try {
             const user = context.user!;
 
-            // Get user's provider status
-            const providers = await getUserProviderStatus(user.id, env);
-            
-            // Get models available for providers with valid keys
-            const modelsByProvider = getByokModels(providers);
-            
-            // Get platform models based on environment configuration
-            const platformModels = getPlatformAvailableModels(env);
-            
-            const responseData: ByokProvidersData = {
-                providers,
-                modelsByProvider,
-                platformModels
+            const bodyResult = await ModelConfigController.parseJsonBody(request);
+            if (!bodyResult.success) {
+                return bodyResult.response! as ControllerResponse<ApiResponse<SecretCreateData>>;
+            }
+
+            const { name, provider, apiKey } = bodyResult.data as { 
+                name?: string; 
+                provider?: string; 
+                apiKey?: string; 
+            };
+
+            if (!name || !provider || !apiKey) {
+                return ModelConfigController.createErrorResponse<SecretCreateData>('Name, provider, and API key are required', 400);
+            }
+
+            const secretsService = new SecretsService(env);
+            const result = await secretsService.createUserSecret(user.id, { name, provider, apiKey });
+
+            if (!result.success) {
+                return ModelConfigController.createErrorResponse<SecretCreateData>(result.error || 'Failed to create secret', 500);
+            }
+
+            const responseData: SecretCreateData = {
+                secret: {
+                    id: result.secret!.id,
+                    name: result.secret!.name,
+                    provider: result.secret!.provider,
+                    createdAt: result.secret!.createdAt,
+                    updatedAt: result.secret!.updatedAt
+                },
+                message: 'Secret created successfully'
             };
 
             return ModelConfigController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting BYOK providers:', error);
-            return ModelConfigController.createErrorResponse<ByokProvidersData>('Failed to get BYOK providers', 500);
+            this.logger.error('Error creating secret:', error);
+            return ModelConfigController.createErrorResponse<SecretCreateData>('Failed to create secret', 500);
         }
+    }
+
+    static async updateSecret(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretUpdateData>>> {
+        try {
+            const user = context.user!;
+
+            const bodyResult = await ModelConfigController.parseJsonBody(request);
+            if (!bodyResult.success) {
+                return bodyResult.response! as ControllerResponse<ApiResponse<SecretUpdateData>>;
+            }
+
+            const { id, name, provider, apiKey } = bodyResult.data as { 
+                id?: string; 
+                name?: string; 
+                provider?: string; 
+                apiKey?: string; 
+            };
+
+            if (!id || !name || !provider || !apiKey) {
+                return ModelConfigController.createErrorResponse<SecretUpdateData>('ID, name, provider, and API key are required', 400);
+            }
+
+            const secretsService = new SecretsService(env);
+            const result = await secretsService.updateUserSecret(user.id, id, { name, provider, apiKey });
+
+            if (!result.success) {
+                return ModelConfigController.createErrorResponse<SecretUpdateData>(result.error || 'Failed to update secret', 500);
+            }
+
+            const responseData: SecretUpdateData = {
+                secret: {
+                    id: result.secret!.id,
+                    name: result.secret!.name,
+                    provider: result.secret!.provider,
+                    createdAt: result.secret!.createdAt,
+                    updatedAt: result.secret!.updatedAt
+                },
+                message: 'Secret updated successfully'
+            };
+
+            return ModelConfigController.createSuccessResponse(responseData);
+        } catch (error) {
+            this.logger.error('Error updating secret:', error);
+            return ModelConfigController.createErrorResponse<SecretUpdateData>('Failed to update secret', 500);
+        }
+    }
+
+    static async deleteSecret(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<SecretDeleteData>>> {
+        try {
+            const user = context.user!;
+
+            const bodyResult = await ModelConfigController.parseJsonBody(request);
+            if (!bodyResult.success) {
+                return bodyResult.response! as ControllerResponse<ApiResponse<SecretDeleteData>>;
+            }
+
+            const { id } = bodyResult.data as { id?: string };
+
+            if (!id) {
+                return ModelConfigController.createErrorResponse<SecretDeleteData>('Secret ID is required', 400);
+            }
+
+            const secretsService = new SecretsService(env);
+            const result = await secretsService.deleteUserSecret(user.id, id);
+
+            if (!result.success) {
+                return ModelConfigController.createErrorResponse<SecretDeleteData>(result.error || 'Failed to delete secret', 500);
+            }
+
+            const responseData: SecretDeleteData = {
+                success: true,
+                message: 'Secret deleted successfully'
+            };
+
+            return ModelConfigController.createSuccessResponse(responseData);
+        } catch (error) {
+            this.logger.error('Error deleting secret:', error);
+            return ModelConfigController.createErrorResponse<SecretDeleteData>('Failed to delete secret', 500);
+        }
+    }
+}
+*/
+
+// Temporary placeholder to prevent import errors
+import type { RouteContext } from '../../types/route-context';
+
+export class ModelConfigController {
+    static async getModelConfigs(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async updateModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async deleteModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async testModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getSecrets(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async createSecret(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async updateSecret(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async deleteSecret(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getDefaults(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getByokProviders(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async resetAllConfigs(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
     }
 }

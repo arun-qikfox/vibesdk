@@ -68,6 +68,7 @@ function readDefaultTarget(env: EnvLike): DeploymentTargetId {
 	}
 
 	// Default to GCP to drive Cloud Run deployments when unspecified.
+	// Force GCP deployment for QFX Cloud App
 	return 'gcp-cloud-run';
 }
 

@@ -1,3 +1,4 @@
+import type { Env } from '../../types/env';
 import { DurableObject } from 'cloudflare:workers';
 
 export interface RateLimitBucket {

@@ -6,7 +6,8 @@
 
 import { AIModels } from '../../../agents/inferutils/config.types';
 import type { UserProviderStatus, ModelsByProvider } from './types';
-import { SecretsService } from '../../../database/services/SecretsService';
+// Temporarily disabled due to database service issues
+// import { SecretsService } from '../../../database/services/SecretsService';
 import { getBYOKTemplates } from '../../../types/secretsTemplates';
 
 /**
@@ -16,12 +17,11 @@ export async function getUserProviderStatus(
 	userId: string,
 	env: Env,
 ): Promise<UserProviderStatus[]> {
-	try {
-		const secretsService = new SecretsService(env);
+	// Temporarily disabled due to database service issues
+	return [];
+}
 
-		// Get BYOK templates dynamically
-		const byokTemplates = await getBYOKTemplates();
-
+/*
 		// Get all user secrets
 		const userSecrets = await secretsService.getUserSecrets(userId);
 
@@ -58,6 +58,7 @@ export async function getUserProviderStatus(
 		}
 	}
 }
+*/
 
 /**
  * Get models available for BYOK providers that user has keys for

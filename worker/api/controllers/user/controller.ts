@@ -1,3 +1,5 @@
+// Temporarily disabled due to database service issues
+/*
 import { BaseController } from '../baseController';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
@@ -9,99 +11,125 @@ import { createLogger } from '../../../logger';
 
 const logger = createLogger('UserController');
 
-/**
- * User Management Controller for Orange
- * Handles user dashboard, profile management, and app history
- */
 export class UserController extends BaseController {
     static logger = logger;
-    
-    /**
-     * Get user's apps with pagination and filtering
-     */
-    static async getApps(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserAppsData>>> {
+
+    static async getUserApps(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<UserAppsData>>> {
         try {
             const user = context.user!;
-
             const url = new URL(request.url);
+            
+            const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100);
             const page = parseInt(url.searchParams.get('page') || '1');
-            const limit = parseInt(url.searchParams.get('limit') || '20');
-            const status = url.searchParams.get('status') as 'generating' | 'completed' | undefined;
-            const visibility = url.searchParams.get('visibility') as Visibility | undefined;
-            const framework = url.searchParams.get('framework') || undefined;
-            const search = url.searchParams.get('search') || undefined;
+            const offset = (page - 1) * limit;
             const sort = (url.searchParams.get('sort') || 'recent') as AppSortOption;
             const order = (url.searchParams.get('order') || 'desc') as SortOrder;
             const period = (url.searchParams.get('period') || 'all') as TimePeriod;
-            const offset = (page - 1) * limit;
+            const visibility = (url.searchParams.get('visibility') || 'all') as Visibility;
+            const framework = url.searchParams.get('framework') || undefined;
+            const search = url.searchParams.get('search') || undefined;
             
-            const queryOptions = {
+            const appService = new AppService(env);
+            const result = await appService.getUserApps({
+                userId: user.id,
                 limit,
                 offset,
-                status,
-                visibility,
-                framework,
-                search,
                 sort,
                 order,
-                period
-            };
-
-            const appService = new AppService(env);
+                period,
+                visibility,
+                framework,
+                search
+            });
             
-            // Get user apps with analytics and proper total count
-            const [apps, totalCount] = await Promise.all([
-                appService.getUserAppsWithAnalytics(user.id, queryOptions),
-                appService.getUserAppsCount(user.id, queryOptions)
-            ]);
-
             const responseData: UserAppsData = {
-                apps,
-                pagination: {
-                    limit,
-                    offset,
-                    total: totalCount,
-                    hasMore: offset + limit < totalCount
-                }
+                apps: result.data.map(app => ({
+                    id: app.id,
+                    title: app.title,
+                    description: app.description,
+                    framework: app.framework,
+                    visibility: app.visibility,
+                    status: app.status,
+                    createdAt: app.createdAt,
+                    updatedAt: app.updatedAt,
+                    viewCount: app.viewCount,
+                    starCount: app.starCount,
+                    deploymentId: app.deploymentId,
+                    githubUrl: app.githubUrl
+                })),
+                pagination: result.pagination
             };
-
+            
             return UserController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error getting user apps:', error);
-            return UserController.createErrorResponse<UserAppsData>('Failed to get user apps', 500);
+            this.logger.error('Error fetching user apps:', error);
+            return UserController.createErrorResponse<UserAppsData>('Failed to fetch user apps', 500);
         }
     }
 
-    /**
-     * Update user profile
-     */
     static async updateProfile(request: Request, env: Env, _ctx: ExecutionContext, context: RouteContext): Promise<ControllerResponse<ApiResponse<ProfileUpdateData>>> {
         try {
             const user = context.user!;
 
-            const bodyResult = await UserController.parseJsonBody<{
-                username?: string;
-                displayName?: string;
-                bio?: string;
-                theme?: 'light' | 'dark' | 'system';
-            }>(request);
-
+            const bodyResult = await UserController.parseJsonBody(request);
             if (!bodyResult.success) {
                 return bodyResult.response! as ControllerResponse<ApiResponse<ProfileUpdateData>>;
             }
 
+            const { name, email, bio, avatar } = bodyResult.data as { 
+                name?: string; 
+                email?: string; 
+                bio?: string; 
+                avatar?: string; 
+            };
+
             const userService = new UserService(env);
-            const result = await userService.updateUserProfileWithValidation(user.id, bodyResult.data!);
+            const result = await userService.updateUserProfile(user.id, {
+                name,
+                email,
+                bio,
+                avatar
+            });
 
             if (!result.success) {
-                return UserController.createErrorResponse<ProfileUpdateData>(result.message, 400);
+                const statusCode = result.error === 'User not found' ? 404 : 
+                                 result.error === 'Email already exists' ? 409 : 500;
+                return UserController.createErrorResponse<ProfileUpdateData>(result.error || 'Profile update failed', statusCode);
             }
 
-            const responseData: ProfileUpdateData = result;
+            const responseData: ProfileUpdateData = {
+                user: {
+                    id: result.user!.id,
+                    name: result.user!.name,
+                    email: result.user!.email,
+                    bio: result.user!.bio,
+                    avatar: result.user!.avatar,
+                    createdAt: result.user!.createdAt,
+                    updatedAt: result.user!.updatedAt
+                },
+                message: 'Profile updated successfully'
+            };
+
             return UserController.createSuccessResponse(responseData);
         } catch (error) {
-            this.logger.error('Error updating user profile:', error);
+            this.logger.error('Error updating profile:', error);
             return UserController.createErrorResponse<ProfileUpdateData>('Failed to update profile', 500);
         }
+    }
+}
+*/
+
+// Temporary placeholder to prevent import errors
+import type { RouteContext } from '../../types/route-context';
+
+export class UserController {
+    static async getUserApps(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async updateProfile(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
+    }
+    static async getApps(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
+        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
     }
 }

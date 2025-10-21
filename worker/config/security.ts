@@ -3,6 +3,7 @@
  * Provides comprehensive security settings for Hono middleware
  */
 
+import type { Env } from '../types/env';
 import { DEFAULT_RATE_LIMIT_SETTINGS, RateLimitSettings } from "../services/rate-limit/config";
 import { Context } from "hono";
 import { isDev } from "../utils/envs";

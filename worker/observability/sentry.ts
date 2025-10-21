@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/cloudflare';
 import type { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import type { Env } from '../types/env';
 import type { AppEnv } from '../types/appenv';
 
 export function sentryOptions(env: Env) : Sentry.CloudflareOptions {

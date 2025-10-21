@@ -3,9 +3,11 @@
  * Handles JWT validation and session management
  */
 
+import type { Env } from '../../types/env';
 import { AuthUserSession } from '../../types/auth-types';
 import { createLogger } from '../../logger';
-import { AuthService } from '../../database/services/AuthService';
+// Temporarily disabled due to database service issues
+// import { AuthService } from '../../database/services/AuthService';
 import { extractToken } from '../../utils/authUtils';
 
 const logger = createLogger('AuthMiddleware');
@@ -17,9 +19,10 @@ export async function validateToken(
     env: Env
 ): Promise<AuthUserSession | null> {
     try {
-        // Use AuthService for token validation and user retrieval
-        const authService = new AuthService(env);
-        return authService.validateTokenAndGetUser(token, env);
+        // Temporarily disabled due to database service issues
+        // const authService = new AuthService(env);
+        // return authService.validateTokenAndGetUser(token, env);
+        return null;
     } catch (error) {
         logger.error('Token validation error', error);
         return null;

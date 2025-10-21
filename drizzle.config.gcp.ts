@@ -6,7 +6,7 @@ const connectionString =
 	'postgres://postgres:postgres@localhost:5432/vibesdk';
 
 export default defineConfig({
-	schema: './worker/database/schema.gcp.ts',
+	schema: './worker/database/schema.ts',
 	out: './migrations/gcp',
 	dialect: 'postgresql',
 	dbCredentials: {

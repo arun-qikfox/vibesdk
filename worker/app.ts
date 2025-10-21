@@ -93,12 +93,35 @@ export function createApp(env: Env): Hono<AppEnv> {
     // By default, all routes require authentication
     app.use('/api/*', setAuthLevel(AuthConfig.ownerOnly));
 
+    // Add root route handler
+    app.get('/', (c) => {
+        return c.json({
+            message: 'VibSDK Control Plane API',
+            version: '1.0.0',
+            status: 'running',
+            endpoints: {
+                health: '/api/health',
+                docs: '/api/docs'
+            }
+        });
+    });
+
+    // Add health check endpoint
+    app.get('/health', (c) => {
+        return c.json({ status: 'healthy', timestamp: new Date().toISOString() });
+    });
+
     // Now setup all the routes
     setupRoutes(app);
 
-    // Add not found route to redirect to ASSETS
+    // Add not found route to redirect to ASSETS (if available)
     app.notFound((c) => {
-        return c.env.ASSETS.fetch(c.req.raw);
+        // If ASSETS binding is available, use it
+        if (c.env.ASSETS) {
+            return c.env.ASSETS.fetch(c.req.raw);
+        }
+        // Otherwise return a simple 404
+        return c.json({ error: 'Not Found' }, 404);
     });
     return app;
 }

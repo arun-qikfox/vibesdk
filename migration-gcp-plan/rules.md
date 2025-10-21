@@ -17,7 +17,7 @@ Use this rule file to coordinate the Google Cloud migration. An LLM or human ope
 | 2 | `migration-gcp-plan/02-runtime-platform.md` | Build Worker bundle, package with `workerd`, publish to Artifact Registry, and deploy Cloud Run control plane. | pending | - | - | - |
 | 3 | `migration-gcp-plan/03-data-layer.md` | Map D1/KV/R2 to Cloud SQL, Firestore/Memorystore, Cloud Storage, and update adapters. | pending | - | - | - |
 | 4 | `migration-gcp-plan/04-durable-objects-and-sandbox.md` | Reproduce Durable Object state, rate limiting, and sandbox flows using Firestore, Redis, Cloud Run Jobs. | pending | - | - | - |
-| 5 | `migration-gcp-plan/05-app-deployment-multicloud.md` | Implement multi-target deployment with Cloud Run default, maintain Cloudflare path, and configure DNS/TLS. | pending | - | - | - |
+| 5 | `migration-gcp-plan/05-app-deployment-multicloud.md` | Implement multi-target deployment with Cloud Run default, maintain Cloudflare path, and configure DNS/TLS. | in-progress | AI Assistant | 2025-01-27 | Steps 1-2 completed (deployment abstraction + build artifacts). Steps 3-7 need completion. See `05-app-deployment-multicloud-completion.md` for detailed completion plan. |
 | 6 | `migration-gcp-plan/06-local-dev-and-testing.md` | Configure local dev/testing against GCP resources, add scripts, and validate end-to-end scenarios. | pending | - | - | - |
 | 7 | `migration-gcp-plan/07-custom-agent-runtime.md` | Design and integrate a first-party agent runtime replacing Cloudflare Agents, leveraging GCP services after migration is complete. | pending | - | - | - |
 

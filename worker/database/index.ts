@@ -7,10 +7,11 @@
 export { DatabaseService, createDatabaseService } from './database';
 
 // Domain-specific services
-export { AnalyticsService } from './services/AnalyticsService';
-export { BaseService } from './services/BaseService';
-export { UserService } from './services/UserService';
-export { AppService } from './services/AppService';
-export { SecretsService } from './services/SecretsService';
-export { ModelConfigService } from './services/ModelConfigService';
-export { ModelTestService } from './services/ModelTestService';
+// export { AnalyticsService } from './services/AnalyticsService'; // Temporarily disabled
+// export { BaseService } from './services/BaseService'; // Temporarily disabled
+// export { UserService } from './services/UserService'; // Temporarily disabled
+// export { AppService } from './services/AppService'; // Temporarily disabled
+// export { SecretsService } from './services/SecretsService'; // Temporarily disabled
+// export { ModelConfigService } from './services/ModelConfigService'; // Temporarily disabled
+// export { ModelTestService } from './services/ModelTestService'; // Temporarily disabled
+// export { AuthService } from './services/AuthService'; // Temporarily disabled

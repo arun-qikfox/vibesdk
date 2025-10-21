@@ -33,14 +33,16 @@ import { getSandboxService } from '../../services/sandbox/factory';
 import { WebSocketMessageData, WebSocketMessageType } from '../../api/websocketTypes';
 import { InferenceContext, AgentActionKey } from '../inferutils/config.types';
 import { AGENT_CONFIG } from '../inferutils/config';
-import { ModelConfigService } from '../../database/services/ModelConfigService';
+// Temporarily disabled due to database service issues
+// import { ModelConfigService } from '../../database/services/ModelConfigService';
 import { FileFetcher, fixProjectIssues } from '../../services/code-fixer';
 import { FastCodeFixerOperation } from '../operations/FastCodeFixer';
 import { getProtocolForHost } from '../../utils/urls';
 import { looksLikeCommand } from '../utils/common';
 import { generateBlueprint } from '../planning/blueprint';
 import { prepareCloudflareButton } from '../../utils/deployToCf';
-import { AppService } from '../../database';
+// Temporarily disabled due to database service issues
+// import { AppService } from '../../database';
 import { RateLimitExceededError } from 'shared/types/errors';
 import { isCloudflareRuntime } from 'shared/platform/runtimeProvider';
 import { generateId } from 'worker/utils/idGenerator';
@@ -237,21 +239,22 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     async saveToDatabase() {
         this.logger().info(`Blueprint generated successfully for agent ${this.getAgentId()}`);
         // Save the app to database (authenticated users only)
-        const appService = new AppService(this.env);
-        await appService.createApp({
-            id: this.state.inferenceContext.agentId,
-            userId: this.state.inferenceContext.userId,
-            sessionToken: null,
-            title: this.state.blueprint.title || this.state.query.substring(0, 100),
-            description: this.state.blueprint.description || null,
-            originalPrompt: this.state.query,
-            finalPrompt: this.state.query,
-            framework: this.state.blueprint.frameworks?.[0],
-            visibility: 'private',
-            status: 'generating',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        });
+        // Temporarily disabled due to database service issues
+        // const appService = new AppService(this.env);
+        // await appService.createApp({
+        //     id: this.state.inferenceContext.agentId,
+        //     userId: this.state.inferenceContext.userId,
+        //     sessionToken: null,
+        //     title: this.state.blueprint.title || this.state.query.substring(0, 100),
+        //     description: this.state.blueprint.description || null,
+        //     originalPrompt: this.state.query,
+        //     finalPrompt: this.state.query,
+        //     framework: this.state.blueprint.frameworks?.[0],
+        //     visibility: 'private',
+        //     status: 'generating',
+        //     createdAt: new Date(),
+        //     updatedAt: new Date()
+        // });
         this.logger().info(`App saved successfully to database for agent ${this.state.inferenceContext.agentId}`, { 
             agentId: this.state.inferenceContext.agentId, 
             userId: this.state.inferenceContext.userId,
@@ -608,13 +611,14 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 error: `Error during generation: ${errorMessage}`
             });
         } finally {
-            const appService = new AppService(this.env);
-            await appService.updateApp(
-                this.getAgentId(),
-                {
-                    status: 'completed',
-                }
-            );
+            // Temporarily disabled due to database service issues
+            // const appService = new AppService(this.env);
+            // await appService.updateApp(
+            //     this.getAgentId(),
+            //     {
+            //         status: 'completed',
+            //     }
+            // );
             this.isGenerating = false;
             this.broadcast(WebSocketMessageResponses.GENERATION_COMPLETE, {
                 message: "Code generation and review process completed.",
@@ -1095,10 +1099,11 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         }
 
         try {
-            const modelConfigService = new ModelConfigService(this.env);
-            
-            // Get all user configs
-            const userConfigsRecord = await modelConfigService.getUserModelConfigs(userId);
+            // Temporarily disabled due to database service issues
+            // const modelConfigService = new ModelConfigService(this.env);
+            // 
+            // // Get all user configs
+            // const userConfigsRecord = await modelConfigService.getUserModelConfigs(userId);
             
             // Transform to match frontend interface
             const agents = Object.entries(AGENT_CONFIG).map(([key, config]) => ({
@@ -1110,29 +1115,41 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             const userConfigs: Record<string, any> = {};
             const defaultConfigs: Record<string, any> = {};
 
-            for (const [actionKey, mergedConfig] of Object.entries(userConfigsRecord)) {
-                if (mergedConfig.isUserOverride) {
-                    userConfigs[actionKey] = {
-                        name: mergedConfig.name,
-                        max_tokens: mergedConfig.max_tokens,
-                        temperature: mergedConfig.temperature,
-                        reasoning_effort: mergedConfig.reasoning_effort,
-                        fallbackModel: mergedConfig.fallbackModel,
-                        isUserOverride: true
-                    };
-                }
-                
-                // Always include default config
-                const defaultConfig = AGENT_CONFIG[actionKey as AgentActionKey];
-                if (defaultConfig) {
-                    defaultConfigs[actionKey] = {
-                        name: defaultConfig.name,
-                        max_tokens: defaultConfig.max_tokens,
-                        temperature: defaultConfig.temperature,
-                        reasoning_effort: defaultConfig.reasoning_effort,
-                        fallbackModel: defaultConfig.fallbackModel
-                    };
-                }
+            // Temporarily disabled due to database service issues
+            // for (const [actionKey, mergedConfig] of Object.entries(userConfigsRecord)) {
+            //     if (mergedConfig.isUserOverride) {
+            //         userConfigs[actionKey] = {
+            //             name: mergedConfig.name,
+            //             max_tokens: mergedConfig.max_tokens,
+            //             temperature: mergedConfig.temperature,
+            //             reasoning_effort: mergedConfig.reasoning_effort,
+            //             fallbackModel: mergedConfig.fallbackModel,
+            //             isUserOverride: true
+            //         };
+            //     }
+            //     
+            //     // Always include default config
+            //     const defaultConfig = AGENT_CONFIG[actionKey as AgentActionKey];
+            //     if (defaultConfig) {
+            //         defaultConfigs[actionKey] = {
+            //             name: defaultConfig.name,
+            //             max_tokens: defaultConfig.max_tokens,
+            //             temperature: defaultConfig.temperature,
+            //             reasoning_effort: defaultConfig.reasoning_effort,
+            //             fallbackModel: defaultConfig.fallbackModel
+            //         };
+            //     }
+            // }
+
+            // Use default configs only for now
+            for (const [actionKey, defaultConfig] of Object.entries(AGENT_CONFIG)) {
+                defaultConfigs[actionKey] = {
+                    name: defaultConfig.name,
+                    max_tokens: defaultConfig.max_tokens,
+                    temperature: defaultConfig.temperature,
+                    reasoning_effort: defaultConfig.reasoning_effort,
+                    fallbackModel: defaultConfig.fallbackModel
+                };
             }
 
             return {
@@ -2009,12 +2026,13 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
                 message: deploymentResult.message
             });
 
-            const appService = new AppService(this.env);
-            // Update cloudflare URL in database
-            await appService.updateDeploymentId(
-                this.getAgentId(),
-                deploymentResult.deploymentId || ''
-            );
+            // Temporarily disabled due to database service issues
+            // const appService = new AppService(this.env);
+            // // Update cloudflare URL in database
+            // await appService.updateDeploymentId(
+            //     this.getAgentId(),
+            //     deploymentResult.deploymentId || ''
+            // );
 
             // Broadcast success message
             this.broadcast(WebSocketMessageResponses.CLOUDFLARE_DEPLOYMENT_COMPLETED, {
@@ -2433,13 +2451,14 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
             });
 
             this.logger().info('Finalizing GitHub export...');
-            const appService = new AppService(this.env);
-            // Update database with GitHub repository URL and visibility
-            await appService.updateGitHubRepository(
-                this.getAgentId() || '',
-                options.repositoryHtmlUrl || '',
-                options.isPrivate ? 'private' : 'public'
-            );
+            // Temporarily disabled due to database service issues
+            // const appService = new AppService(this.env);
+            // // Update database with GitHub repository URL and visibility
+            // await appService.updateGitHubRepository(
+            //     this.getAgentId() || '',
+            //     options.repositoryHtmlUrl || '',
+            //     options.isPrivate ? 'private' : 'public'
+            // );
 
             // Broadcast success
             this.broadcast(WebSocketMessageResponses.GITHUB_EXPORT_COMPLETED, {
@@ -2676,8 +2695,9 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
             // Persist in database
             try {
-                const appService = new AppService(this.env);
-                await appService.updateAppScreenshot(this.getAgentId(), uploadedImage.publicUrl);
+                // Temporarily disabled due to database service issues
+                // const appService = new AppService(this.env);
+                // await appService.updateAppScreenshot(this.getAgentId(), uploadedImage.publicUrl);
             } catch (dbError) {
                 const error = `Database update failed: ${dbError instanceof Error ? dbError.message : 'Unknown database error'}`;
                 this.broadcast(WebSocketMessageResponses.SCREENSHOT_CAPTURE_ERROR, {

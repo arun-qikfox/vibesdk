@@ -1,3 +1,5 @@
+import type { Env } from '../../types/env';
+
 export interface GcpDatabaseEnv {
     DATABASE_URL?: string;
     DATABASE_SOCKET_PATH?: string;

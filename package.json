@@ -1,7 +1,8 @@
 {
-	"name": "vibesdk",
+	"name": "qfx-cloud-app",
 	"private": true,
-	"version": "0.0.0",
+	"version": "1.0.0",
+	"description": "QFX Cloud App - AI-powered application builder",
 	"type": "module",
 	"scripts": {
 		"setup": "tsx scripts/setup.ts",
@@ -10,6 +11,8 @@
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",
 		"deploy": "bun --env-file .prod.vars scripts/deploy.ts",
+		"deploy:gcp": "tsx scripts/deploy-gcp.ts",
+		"deploy:qfx": "./deploy-gcp.sh",
 		"build:worker": "tsx scripts/build-worker.ts",
 		"cloudrun:context": "tsx scripts/create-cloudrun-context.ts",
 		"docker:build-workerd": "docker build -f container/Dockerfile.workerd -t vibesdk-workerd:latest .",
@@ -18,9 +21,11 @@
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
 		"db:generate": "drizzle-kit generate --config=drizzle.config.local.ts",
-		"db:generate:remote": "drizzle-kit generate --config=drizzle.config.remote.ts",
+		"db:generate:gcp": "drizzle-kit generate --config=drizzle.config.gcp.ts",
+		"db:generate:remote": "drizzle-kit generate --config=drizzle.config.gcp.ts",
 		"db:migrate:local": "wrangler d1 migrations apply vibesdk-db --local",
-		"db:migrate:remote": "CI=true wrangler d1 migrations apply vibesdk-db --remote",
+		"db:migrate:gcp": "drizzle-kit migrate --config=drizzle.config.gcp.ts",
+		"db:migrate:remote": "drizzle-kit migrate --config=drizzle.config.gcp.ts",
 		"db:studio": "drizzle-kit studio --config=drizzle.config.local.ts",
 		"db:studio:remote": "drizzle-kit studio --config=drizzle.config.remote.ts",
 		"db:drop": "drizzle-kit drop --config=drizzle.config.local.ts",
@@ -33,7 +38,7 @@
 		"knip:production": "knip --production",
 		"knip:dependencies": "knip --dependencies",
 		"knip:exports": "knip --exports",
-		"test:platform": "vitest run --config vitest.platform.config.ts"
+		"check:config": "tsx scripts/check-config.ts"
 	},
 	"dependencies": {
 		"@cloudflare/containers": "^0.0.28",

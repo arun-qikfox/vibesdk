@@ -93,8 +93,6 @@ export type {
 	NewPasswordResetToken,
 	EmailVerificationToken,
 	NewEmailVerificationToken,
-	VerificationOtp,
-	NewVerificationOtp,
 	AuditLog,
 	NewAuditLog,
 	UserSecret,

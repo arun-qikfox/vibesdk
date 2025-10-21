@@ -1,3 +1,5 @@
+import type { Env } from '../types/env';
+
 export function isProd(env: Env) {
     return env.ENVIRONMENT === 'prod' || env.ENVIRONMENT === 'production';
 }

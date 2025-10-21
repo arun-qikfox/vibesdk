@@ -140,7 +140,7 @@ export class GcpFirestoreKVProvider implements KVProvider {
 
 		const keys: KVListKey[] = [];
 		await Promise.all(
-			snapshot.docs.map(async (doc) => {
+			snapshot.docs.map(async (doc: any) => {
 				const data = doc.data() as MemoryEntry;
 				if (data.expiration && data.expiration <= nowSeconds) {
 					await doc.ref.delete().catch(() => undefined);

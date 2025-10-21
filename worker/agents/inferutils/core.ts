@@ -1,3 +1,4 @@
+import type { Env } from '../../types/env';
 import { OpenAI } from 'openai';
 import { Stream } from 'openai/streaming';
 import { z } from 'zod';
