@@ -3,7 +3,7 @@
  * Provides database connection, core utilities, and base operations∂ƒ
  */
 
-import * as schema from './schema';
+// import * as schema from './schema';
 
 import type { HealthStatusResult } from './types';
 import type { DatabaseInstance } from './clients/types';

@@ -6,7 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"setup": "tsx scripts/setup.ts",
-		"dev": "DEV_MODE=true vite",
+		"dev": "DEV_MODE=true RUNTIME_PROVIDER=gcp vite",
 		"build": "tsc -b --incremental && vite build",
 		"lint": "eslint .",
 		"preview": "npm run build && vite preview",

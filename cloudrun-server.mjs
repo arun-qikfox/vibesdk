@@ -100,69 +100,81 @@ function handleAPI(req, res, pathname) {
         return;
     }
     
-    if (pathname === '/api/auth/register' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
-        req.on('end', () => {
-            try {
-                const data = JSON.parse(body);
-                const { email, name } = data;
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: true,
-                    data: {
-                        user: { 
-                            id: 'temp-' + Date.now(), 
-                            email: email || 'user@example.com', 
-                            name: name || 'User' 
+        if (pathname === '/api/auth/register' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    const { email, name } = data;
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: true,
+                        data: {
+                            user: {
+                                id: 'temp-' + Date.now(),
+                                email: email || 'user@example.com',
+                                name: name || 'User'
+                            },
+                            sessionId: 'session-' + Date.now(),
+                            accessToken: 'temp-access-token',
+                            refreshToken: 'temp-refresh-token'
                         },
-                        sessionId: 'session-' + Date.now(),
-                        accessToken: 'temp-access-token',
-                        refreshToken: 'temp-refresh-token'
-                    },
-                    message: 'Registration successful'
-                }));
-            } catch (error) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Invalid JSON' }));
-            }
-        });
-        return;
-    }
+                        message: 'Registration successful'
+                    }));
+                } catch (error) {
+                    console.error('JSON parsing error:', error);
+                    console.error('Body received:', body);
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ 
+                        success: false,
+                        error: 'Invalid JSON',
+                        details: error.message 
+                    }));
+                }
+            });
+            return;
+        }
     
-    if (pathname === '/api/auth/login' && req.method === 'POST') {
-        let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
-        req.on('end', () => {
-            try {
-                const data = JSON.parse(body);
-                const { email, password } = data;
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: true,
-                    data: {
-                        user: { 
-                            id: 'temp-' + Date.now(), 
-                            email: email || 'user@example.com', 
-                            name: 'User' 
+        if (pathname === '/api/auth/login' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    const { email, password } = data;
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: true,
+                        data: {
+                            user: {
+                                id: 'temp-' + Date.now(),
+                                email: email || 'user@example.com',
+                                name: 'User'
+                            },
+                            sessionId: 'session-' + Date.now(),
+                            accessToken: 'temp-access-token',
+                            refreshToken: 'temp-refresh-token'
                         },
-                        sessionId: 'session-' + Date.now(),
-                        accessToken: 'temp-access-token',
-                        refreshToken: 'temp-refresh-token'
-                    },
-                    message: 'Login successful'
-                }));
-            } catch (error) {
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'Invalid JSON' }));
-            }
-        });
-        return;
-    }
+                        message: 'Login successful'
+                    }));
+                } catch (error) {
+                    console.error('JSON parsing error:', error);
+                    console.error('Body received:', body);
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ 
+                        success: false,
+                        error: 'Invalid JSON',
+                        details: error.message 
+                    }));
+                }
+            });
+            return;
+        }
     
     if (pathname === '/api/auth/check') {
         res.writeHead(200, { 'Content-Type': 'application/json' });

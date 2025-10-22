@@ -203,3 +203,9 @@ resource "google_storage_bucket_iam_member" "cb_source_creator" {
   role   = "roles/storage.objectCreator"
   member = "serviceAccount:${local.cloudbuild_sa}"
 }
+
+# --- Note: Public access is restricted by organization policy
+# To enable public access, you may need to:
+# 1. Contact your organization administrator to modify the policy
+# 2. Or use authenticated access with service account
+# 3. Or deploy to a different project without organization policies
