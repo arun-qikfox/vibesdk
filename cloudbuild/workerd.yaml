@@ -45,10 +45,7 @@ steps:
 substitutions:
   _LOCATION: us-central1
   _REPOSITORY: vibesdk
-  _SERVICE_NAME: workerd
-
-images:
-  - "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:${COMMIT_SHA}"
+  _SERVICE_NAME: vibesdk-control-plane
 
 options:
   logging: CLOUD_LOGGING_ONLY

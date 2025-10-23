@@ -1,7 +1,7 @@
 project_id = "qfxcloud-app-builder"
 region     = "us-central1"
 
-runtime_image        = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:full-services-"
+runtime_image        = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/vibesdk-control-plane:20251023-113415"
 runtime_service_name = "vibesdk-control-plane"
 
 templates_bucket_name     = "vibesdk-templates"

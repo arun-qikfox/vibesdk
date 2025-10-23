@@ -1,11 +1,13 @@
 # syntax=docker/dockerfile:1.7
 
-FROM debian:bullseye-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
 # Install Node.js and workerd CLI
 RUN apt-get update && apt-get install -y curl && \
-    curl -fsSL https://github.com/cloudflare/workerd/releases/download/v1.20251011.0/workerd-linux-x64 -o /usr/local/bin/workerd && \
+    curl -fsSL https://github.com/cloudflare/workerd/releases/download/v1.20251023.0/workerd-linux-64.gz -o /tmp/workerd.gz && \
+    gunzip /tmp/workerd.gz && \
+    mv /tmp/workerd /usr/local/bin/workerd && \
     chmod +x /usr/local/bin/workerd && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 

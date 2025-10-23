@@ -56,6 +56,30 @@ Use this rule file to coordinate the Google Cloud migration. An LLM or human ope
 - ALL infrastructure changes must be defined in Terraform files first
 - Use Terraform to manage Cloud Run services, networking, IAM, storage, and all GCP resources
 
+### WSL/Cursor Users - Critical Setup Notes
+
+**If using Cursor with WSL (Windows Subsystem for Linux):**
+
+1. **Terminal Access**: Use `Ctrl+Shift+` ` (backtick) to open integrated terminal in Cursor
+2. **WSL Commands Only**: All deployment commands must be run in WSL terminal, NOT Windows PowerShell
+3. **Path Format**: Use Linux paths (`/home/arunr/projects/vibesdk`) not Windows paths (`C:\Users\...`)
+4. **File Access**: Files accessible via `\\wsl.localhost\Ubuntu\home\arunr\projects\vibesdk\` in Windows Explorer
+
+**WSL Verification Commands:**
+```bash
+# Verify you're in WSL (should show Linux kernel)
+uname -a
+
+# Navigate to project directory
+cd /home/arunr/projects/vibesdk
+
+# Verify gcloud authentication
+gcloud auth list
+gcloud config get-value project
+```
+
+**Reference**: See `final-deployment.md` for complete WSL/Cursor-specific deployment guide with troubleshooting.
+
 ## Migration Progress Tracker
 
 | Step | File | Summary | Status | Owner | Last Update | Notes |

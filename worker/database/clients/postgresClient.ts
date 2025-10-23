@@ -1,4 +1,41 @@
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import type { DatabaseClient, DatabaseInstance } from './types';
+import * as schema from '../schema';
+
+class PostgresDatabaseClient implements DatabaseClient {
+    public readonly kind = 'postgres' as const;
+    private readonly primaryDb: DatabaseInstance;
+    private readonly readDb: DatabaseInstance;
+    private readonly sql: postgres.Sql;
+
+    constructor(databaseUrl: string) {
+        // Create postgres connection
+        this.sql = postgres(databaseUrl, {
+            max: 10,
+            idle_timeout: 20,
+            connect_timeout: 10,
+        });
+
+        // Create drizzle instances
+        this.primaryDb = drizzle(this.sql, { schema });
+        this.readDb = drizzle(this.sql, { schema });
+    }
+
+    getPrimary(): DatabaseInstance {
+        return this.primaryDb;
+    }
+
+    getReadReplica(strategy: 'fast' | 'fresh' = 'fast'): DatabaseInstance {
+        // For now, return the same instance since we're using a single connection
+        // In production, you might want to use read replicas
+        return this.readDb;
+    }
+
+    async dispose(): Promise<void> {
+        await this.sql.end();
+    }
+}
 
 class StubPostgresClient implements DatabaseClient {
     public readonly kind = 'postgres' as const;
@@ -27,10 +64,16 @@ class StubPostgresClient implements DatabaseClient {
 
 export function createPostgresClient(env: Env): DatabaseClient {
     const databaseUrl = (env as unknown as Record<string, unknown>)?.DATABASE_URL;
-    const reason = typeof databaseUrl === 'string' && databaseUrl.length > 0
-        ? 'adapter implementation pending'
-        : 'DATABASE_URL is missing';
+    
+    if (typeof databaseUrl !== 'string' || databaseUrl.length === 0) {
+        return new StubPostgresClient('DATABASE_URL is missing');
+    }
 
-    return new StubPostgresClient(reason);
+    try {
+        return new PostgresDatabaseClient(databaseUrl);
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Unknown error';
+        return new StubPostgresClient(`Failed to create postgres client: ${reason}`);
+    }
 }
 

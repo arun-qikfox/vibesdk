@@ -35,63 +35,70 @@ export function createApp(env: Env): Hono<AppEnv> {
         return secureHeaders(getSecureHeadersConfig(env))(c, next);
     });
     
-    // CORS configuration
-    app.use('/api/*', cors(getCORSConfig(env)));
+    // CORS configuration - Allow all origins for testing
+    app.use('/api/*', cors({
+        origin: '*',
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+        allowHeaders: ['*'],
+        exposeHeaders: ['*'],
+        maxAge: 86400,
+        credentials: false
+    }));
     
-    // CSRF protection using double-submit cookie pattern with proper GET handling
-    app.use('*', async (c, next) => {
-        const method = c.req.method.toUpperCase();
-        
-        // Skip for WebSocket upgrades
-        const upgradeHeader = c.req.header('upgrade');
-        if (upgradeHeader?.toLowerCase() === 'websocket') {
-            return next();
-        }
-        
-        try {
-            // Handle GET requests - establish CSRF token if needed
-            if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
-                await next();
-                
-                // Only set CSRF token for successful API responses
-                if (c.req.url.startsWith('/api/') && c.res.status < 400) {
-                    await CsrfService.enforce(c.req.raw, c.res);
-                }
-                
-                return;
-            }
-            
-            // Validate CSRF token for state-changing requests
-            await CsrfService.enforce(c.req.raw, undefined);
-            await next();
-        } catch (error) {
-            if (error instanceof SecurityError && error.type === SecurityErrorType.CSRF_VIOLATION) {
-                return new Response(JSON.stringify({ 
-                    error: { 
-                        message: 'CSRF validation failed',
-                        type: SecurityErrorType.CSRF_VIOLATION
-                    }
-                }), {
-                    status: 403,
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            }
-            throw error;
-        }
-    });
+    // CSRF protection DISABLED for testing
+    // app.use('*', async (c, next) => {
+    //     const method = c.req.method.toUpperCase();
+    //     
+    //     // Skip for WebSocket upgrades
+    //     const upgradeHeader = c.req.header('upgrade');
+    //     if (upgradeHeader?.toLowerCase() === 'websocket') {
+    //         return next();
+    //     }
+    //     
+    //     try {
+    //         // Handle GET requests - establish CSRF token if needed
+    //         if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    //             await next();
+    //             
+    //             // Only set CSRF token for successful API responses
+    //             if (c.req.url.startsWith('/api/') && c.res.status < 400) {
+    //                 await CsrfService.enforce(c.req.raw, c.res);
+    //             }
+    //             
+    //             return;
+    //         }
+    //         
+    //         // Validate CSRF token for state-changing requests
+    //         await CsrfService.enforce(c.req.raw, undefined);
+    //         await next();
+    //     } catch (error) {
+    //         if (error instanceof SecurityError && error.type === SecurityErrorType.CSRF_VIOLATION) {
+    //             return new Response(JSON.stringify({ 
+    //                 error: { 
+    //                     message: 'CSRF validation failed',
+    //                     type: SecurityErrorType.CSRF_VIOLATION
+    //                 }
+    //             }), {
+    //                 status: 403,
+    //                 headers: { 'Content-Type': 'application/json' }
+    //             });
+    //         }
+    //         throw error;
+    //     }
+    // });
 
     app.use('/api/*', async (c, next) => {
         // Apply global config middleware
         const config = await getGlobalConfigurableSettings(env);
         c.set('config', config);
 
-        // Apply global rate limit middleware. Should this be moved after setupRoutes so that maybe 'user' is available?
-        await RateLimitService.enforceGlobalApiRateLimit(env, c.get('config').security.rateLimit, null, c.req.raw)
+        // Rate limiting DISABLED for testing
+        // await RateLimitService.enforceGlobalApiRateLimit(env, c.get('config').security.rateLimit, null, c.req.raw)
         await next();
     })
 
-    // By default, all routes require authentication
-    app.use('/api/*', setAuthLevel(AuthConfig.ownerOnly));
+    // Authentication DISABLED for testing
+    // app.use('/api/*', setAuthLevel(AuthConfig.ownerOnly));
 
     // Add root route handler
     app.get('/', (c) => {
