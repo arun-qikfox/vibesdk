@@ -1,7 +1,7 @@
 project_id = "qfxcloud-app-builder"
 region     = "us-central1"
 
-runtime_image        = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/vibesdk-control-plane:20251023-113415"
+runtime_image        = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest"
 runtime_service_name = "vibesdk-control-plane"
 
 templates_bucket_name     = "vibesdk-templates"
@@ -16,7 +16,7 @@ runtime_env = {
   DISPATCH_NAMESPACE        = "vibesdk-default-namespace"
   ENABLE_READ_REPLICAS      = "true"
   CLOUDFLARE_AI_GATEWAY     = "vibesdk-gateway"
-  CUSTOM_DOMAIN             = "vibesdk-control-plane-2pklfi2owa-uc.a.run.app"
+  CUSTOM_DOMAIN             = "vibesdk-control-plane-2886014379.us-central1.run.app"
   MAX_SANDBOX_INSTANCES     = "10"
   SANDBOX_INSTANCE_TYPE     = "standard-3"
   USE_CLOUDFLARE_IMAGES     = "false"
@@ -24,7 +24,7 @@ runtime_env = {
   SANDBOX_SUBSCRIPTION      = "vibesdk-sandbox-requests-subscription"
   SANDBOX_RUN_COLLECTION    = "sandboxRuns"   # optional, defaults to sandboxRuns if omitted
   GCS_TEMPLATES_BUCKET      = "vibesdk-templates"
-  GCS_ASSETS_PREFIX         = "frontend-assets"
+  GCS_FRONTEND_BUCKET       = "vibesdk-frontend"
   FIRESTORE_PROJECT_ID      = "qfxcloud-app-builder"
   FIRESTORE_COLLECTION      = "vibesdk-kv"
   AI_GATEWAY_URL            = ""
@@ -33,7 +33,6 @@ runtime_env = {
 }
 
 runtime_ingress = "INGRESS_TRAFFIC_ALL"
-runtime_vpc_egress = "PRIVATE_RANGES_ONLY"
 
 sandbox_job_name            = "vibesdk-sandbox-job"
 sandbox_pubsub_topic        = "vibesdk-sandbox-requests"

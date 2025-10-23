@@ -6,6 +6,7 @@ locals {
       "roles/cloudsql.client",
       "roles/pubsub.publisher",
       "roles/storage.objectAdmin",
+      "roles/iam.serviceAccountTokenCreator",
     ]
     ci = [
       "roles/run.invoker",

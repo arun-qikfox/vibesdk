@@ -6,7 +6,6 @@
 import { DEFAULT_RATE_LIMIT_SETTINGS, RateLimitSettings } from "../services/rate-limit/config";
 import { Context } from "hono";
 import { isDev } from "../utils/envs";
-import { isGcpRuntime } from "shared/platform/runtimeProvider";
 
 // Type definitions for security configurations
 export interface CORSConfig {
@@ -48,12 +47,6 @@ export function getAllowedOrigins(env: Env): string[] {
         origins.push(`https://${env.CUSTOM_DOMAIN}`);
     }
     
-    // GCP Cloud Run domains
-    if (isGcpRuntime(env)) {
-        // Allow all origins for GCP environment to ensure proper CORS
-        origins.push('*');
-    }
-    
     // Development origins (only in development)
     if (isDev(env)) {
         origins.push('http://localhost:3000');
@@ -78,6 +71,18 @@ export function isOriginAllowed(env: Env, origin: string): boolean {
     
     // Check against allowed origins
     return allowedOrigins.includes(origin);
+}
+
+/**
+ * Get rate limit settings based on environment
+ */
+export function getRateLimitSettings(env: Env): RateLimitSettings {
+    // For GCP environment, use default settings
+    if (isGcpRuntime(env)) {
+        return DEFAULT_RATE_LIMIT_SETTINGS;
+    }
+    
+    return DEFAULT_RATE_LIMIT_SETTINGS;
 }
 
 /**
@@ -109,7 +114,6 @@ export function getCORSConfig(env: Env): CORSConfig {
 /**
  * CSRF Protection Configuration
  * Double-submit cookie pattern with origin validation
- * Disabled for GCP environment to ensure proper functionality
  */
 export function getCSRFConfig(env: Env): CSRFConfig {
     return {
@@ -119,14 +123,6 @@ export function getCSRFConfig(env: Env): CSRFConfig {
         cookieName: 'csrf-token',
         headerName: 'X-CSRF-Token'
     };
-}
-
-/**
- * Check if CSRF protection should be enabled
- * Disabled for GCP environment to ensure proper functionality
- */
-export function isCSRFEnabled(env: Env): boolean {
-    return !isGcpRuntime(env);
 }
 
 // Type for CSP directives

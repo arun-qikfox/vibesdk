@@ -7,7 +7,7 @@ import { createApp } from './app';
 // import { sentryOptions } from './observability/sentry';
 import { DORateLimitStore as BaseDORateLimitStore } from './services/rate-limit/DORateLimitStore';
 import { getPreviewDomain } from './utils/urls';
-import { proxyToAiGateway } from './services/aigateway-proxy/controller';
+// import { proxyToAiGateway } from './services/aigateway-proxy/controller';
 import { isOriginAllowed } from './config/security';
 import { getRuntimeProvider, RuntimeProvider } from 'shared/platform/runtimeProvider';
 import {
@@ -16,10 +16,10 @@ import {
 } from 'shared/platform/storage';
 import { ensureSecrets } from './utils/secretLoader';
 import { createAgentStore } from 'shared/platform/durableObjects';
-import { AppService } from './database/services/AppService';
-import { DeploymentService } from './database/services/DeploymentService';
 import type { AppDeploymentStatus } from './database/schema';
 import type { DatabaseRuntimeEnv } from './database/runtime/types';
+import { AppService } from './database/services/AppService';
+import { createDatabaseService } from './database/database';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
@@ -35,13 +35,14 @@ const logger = createLogger('App');
 function setOriginControl(env: Env, request: Request, currentHeaders: Headers): Headers {
     const origin = request.headers.get('Origin');
     
-    if (origin && isOriginAllowed(env, origin)) {
+    // Allow all origins for testing - disable origin validation
+    if (origin) {
         currentHeaders.set('Access-Control-Allow-Origin', origin);
     }
     return currentHeaders;
 }
 
-function buildAssetKeyCandidates(pathname: string): string[] {
+function buildAssetKeyCandidates(pathname: string, env: Env): string[] {
 	const cleanPath = pathname.replace(/[#?].*$/, '');
 	let key = cleanPath.replace(/^\/+/, '');
 	if (key === '') {
@@ -50,6 +51,7 @@ function buildAssetKeyCandidates(pathname: string): string[] {
 	if (key.endsWith('/')) {
 		key = `${key}index.html`;
 	}
+	
 	const candidates = [key];
 	if (!key.endsWith('.html')) {
 		candidates.push('index.html');
@@ -90,22 +92,35 @@ async function responseFromStoreResult(
 }
 
 async function serveAssetFromObjectStore(request: Request, env: Env): Promise<Response | null> {
-	const store = createObjectStore(env as unknown as Record<string, unknown>);
 	const url = new URL(request.url);
-	const candidates = buildAssetKeyCandidates(url.pathname);
+	const candidates = buildAssetKeyCandidates(url.pathname, env);
+	
+	logger.info(`serveAssetFromObjectStore: pathname=${url.pathname}, runtimeProvider=${getRuntimeProvider(env)}, GCS_FRONTEND_BUCKET=${env.GCS_FRONTEND_BUCKET}`);
+	logger.info(`serveAssetFromObjectStore: candidates=${JSON.stringify(candidates)}`);
+	
+	// Use frontend bucket for assets
+	const frontendStore = createObjectStore({
+		...env,
+		GCS_TEMPLATES_BUCKET: env.GCS_FRONTEND_BUCKET
+	} as unknown as Record<string, unknown>);
+	
 	for (const key of candidates) {
 		try {
-			const asset = await store.get(key);
+			logger.info(`serveAssetFromObjectStore: attempting to fetch key='${key}' from frontend bucket`);
+			const asset = await frontendStore.get(key);
 			if (!asset) {
+				logger.info(`serveAssetFromObjectStore: no asset found for key='${key}'`);
 				continue;
 			}
+			logger.info(`serveAssetFromObjectStore: found asset for key='${key}'`);
 			return await responseFromStoreResult(asset, request.method);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			logger.error(`Failed to read asset from GCS (key=${key})`, { error: message });
+			logger.error(`serveAssetFromObjectStore: error fetching asset from frontend bucket with key '${key}':`, { error: message });
 			throw error;
 		}
 	}
+	logger.info(`serveAssetFromObjectStore: no asset found for any candidate`);
 	return null;
 }
 
@@ -152,115 +167,71 @@ async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Resp
 		return new Response('Preview environment not found.', { status: 404 });
 	}
 
-	const dbEnv = env as unknown as DatabaseRuntimeEnv;
-	const appService = new AppService(dbEnv);
-	const app = await appService.getAppByDeploymentId(deploymentKey);
-
-	if (!app) {
-		logger.info('No app matched deployment key for Cloud Run request', { deploymentKey });
-		return new Response('Application not found.', { status: 404 });
-	}
-
-	const deploymentService = new DeploymentService(dbEnv);
-	const deployment = await deploymentService.getLatestDeployment(app.id, 'gcp-cloud-run');
-
-	if (!deployment) {
-		logger.info('No Cloud Run deployment record found', { appId: app.id, deploymentKey });
-		return new Response('Application has not been deployed to Cloud Run yet.', { status: 404 });
-	}
-
-	if (!deployment.serviceUrl || deployment.status !== 'active') {
-		const { status, message } = mapDeploymentStatusToHttp(deployment.status);
-		return new Response(message, { status });
-	}
-
-	let targetBase: URL;
+	// Check database for app and deployment info
 	try {
-		targetBase = new URL(deployment.serviceUrl);
+		const databaseService = createDatabaseService(env);
+		const appService = new AppService(env);
+		
+		// Get app by deployment key
+		const app = await appService.getAppByDeploymentKey(deploymentKey);
+		if (!app) {
+			return new Response('Preview environment not found.', { status: 404 });
+		}
+
+		// Check if app has a Cloud Run deployment
+		if (!app.deploymentId) {
+			return new Response('Preview environment not deployed.', { status: 404 });
+		}
+
+		// Proxy to Cloud Run service
+		const cloudRunUrl = `https://${app.deploymentId}-${env.GCP_PROJECT_ID}.${env.GCP_REGION}.run.app${url.pathname}${url.search}`;
+		const cloudRunRequest = new Request(cloudRunUrl, {
+			method: request.method,
+			headers: request.headers,
+			body: request.body
+		});
+
+		const response = await fetch(cloudRunRequest);
+		return response;
 	} catch (error) {
-		logger.error('Invalid Cloud Run service URL', {
-			serviceUrl: deployment.serviceUrl,
-			error,
-		});
-		return new Response('Invalid Cloud Run deployment configuration.', { status: 500 });
-	}
-
-	const proxiedUrl = new URL(url.pathname + url.search, targetBase);
-	const clonedRequest = request.clone();
-	const headers = new Headers(clonedRequest.headers);
-	headers.delete('host');
-	headers.delete('Host');
-
-	const fetchInit: RequestInit = {
-		method: clonedRequest.method,
-		headers,
-		redirect: 'manual',
-	};
-
-	if (!['GET', 'HEAD'].includes(clonedRequest.method.toUpperCase())) {
-		fetchInit.body = clonedRequest.body;
-	}
-
-	try {
-		const proxiedResponse = await fetch(proxiedUrl.toString(), fetchInit);
-		let responseHeaders = new Headers(proxiedResponse.headers);
-		responseHeaders.set('X-Preview-Type', 'cloud-run');
-		responseHeaders = setOriginControl(env, request, responseHeaders);
-		responseHeaders.append('Vary', 'Origin');
-		responseHeaders.set('Access-Control-Expose-Headers', 'X-Preview-Type');
-
-		return new Response(proxiedResponse.body, {
-			status: proxiedResponse.status,
-			statusText: proxiedResponse.statusText,
-			headers: responseHeaders,
-		});
-	} catch (error) {
-		logger.error('Failed to proxy request to Cloud Run service', {
-			error,
-			proxiedUrl: proxiedUrl.toString(),
-		});
-		return new Response('Error contacting Cloud Run service.', { status: 502 });
+		logger.error('Error proxying to Cloud Run:', error);
+		return new Response('Preview environment error.', { status: 500 });
 	}
 }
 
 /**
  * Handles requests for user-deployed applications on subdomains.
  * It first attempts to proxy to a live development sandbox. If that fails,
- * it dispatches the request to a permanently deployed worker via namespaces.
+ * it checks for Cloud Run deployments first, then falls back to Cloudflare Workers dispatch.
  * This function will NOT fall back to the main worker.
  *
  * @param request The incoming Request object.
  * @param env The environment bindings.
- * @returns A Response object from the sandbox, the dispatched worker, or an error.
+ * @returns A Response object from the sandbox, Cloud Run, dispatched worker, or an error.
  */
-async function handleUserAppRequest(request: Request, env: Env, runtimeProvider: RuntimeProvider): Promise<Response> {
+async function handleUserAppRequest(request: Request, env: Env, _runtimeProvider: RuntimeProvider): Promise<Response> {
 	const url = new URL(request.url);
 	const { hostname } = url;
 	logger.info(`Handling user app request for: ${hostname}`);
-
-	if (runtimeProvider !== 'cloudflare') {
-		logger.warn(`Sandbox preview requested on ${runtimeProvider} runtime. Returning not implemented.`);
-		return new Response('Sandbox preview is not yet available on this runtime.', { status: 501 });
-	}
 
 	// 1. Attempt to proxy to a live development sandbox.
 	// proxyToSandbox doesn't consume the request body on a miss, so no clone is needed here.
 	const sandboxResponse = await proxyToSandbox(request, env);
 	if (sandboxResponse) {
 		logger.info(`Serving response from sandbox for: ${hostname}`);
-		
+
 		// Add headers to identify this as a sandbox response
 		let headers = new Headers(sandboxResponse.headers);
-		
-        if (sandboxResponse.status === 500) {
-            headers.set('X-Preview-Type', 'sandbox-error');
-        } else {
-            headers.set('X-Preview-Type', 'sandbox');
-        }
-        headers = setOriginControl(env, request, headers);
-        headers.append('Vary', 'Origin');
+
+		if (sandboxResponse.status === 500) {
+			headers.set('X-Preview-Type', 'sandbox-error');
+		} else {
+			headers.set('X-Preview-Type', 'sandbox');
+		}
+		headers = setOriginControl(env, request, headers);
+		headers.append('Vary', 'Origin');
 		headers.set('Access-Control-Expose-Headers', 'X-Preview-Type');
-		
+
 		return new Response(sandboxResponse.body, {
 			status: sandboxResponse.status,
 			statusText: sandboxResponse.statusText,
@@ -268,8 +239,22 @@ async function handleUserAppRequest(request: Request, env: Env, runtimeProvider:
 		});
 	}
 
-	// 2. If sandbox misses, attempt to dispatch to a deployed worker.
-	logger.info(`Sandbox miss for ${hostname}, attempting dispatch to permanent worker.`);
+	// 2. Check if this is a Cloud Run preview request (multi-cloud support)
+	const previewDomain = getPreviewDomain(env);
+	if (previewDomain && hostname.endsWith(`.${previewDomain}`)) {
+		try {
+			const cloudRunResponse = await proxyCloudRunAppRequest(request, env);
+			logger.info(`Routing to Cloud Run deployment for: ${hostname}`);
+			return cloudRunResponse;
+		} catch (error) {
+			logger.warn(`Cloud Run routing failed for ${hostname}, falling back to dispatcher`, error);
+			// Continue to dispatcher fallback
+		}
+	}
+
+	// 3. If sandbox misses and Cloud Run is not available/applicable, attempt to dispatch to a deployed worker.
+	// This maintains backwards compatibility with existing Cloudflare deployments.
+	logger.info(`Sandbox and Cloud Run miss for ${hostname}, attempting dispatch to permanent worker.`);
 	if (!isDispatcherAvailable(env)) {
 		logger.warn(`Dispatcher not available, cannot serve: ${hostname}`);
 		return new Response('This application is not currently available.', { status: 404 });
@@ -282,15 +267,15 @@ async function handleUserAppRequest(request: Request, env: Env, runtimeProvider:
 	try {
 		const worker = dispatcher.get(appName);
 		const dispatcherResponse = await worker.fetch(request);
-		
+
 		// Add headers to identify this as a dispatcher response
 		let headers = new Headers(dispatcherResponse.headers);
-		
+
 		headers.set('X-Preview-Type', 'dispatcher');
-        headers = setOriginControl(env, request, headers);
-        headers.append('Vary', 'Origin');
+		headers = setOriginControl(env, request, headers);
+		headers.append('Vary', 'Origin');
 		headers.set('Access-Control-Expose-Headers', 'X-Preview-Type');
-		
+
 		return new Response(dispatcherResponse.body, {
 			status: dispatcherResponse.status,
 			statusText: dispatcherResponse.statusText,
@@ -337,8 +322,19 @@ const worker = {
 		// 1. Critical configuration check: Ensure custom domain is set.
         const previewDomain = getPreviewDomain(env);
 		if (!previewDomain || previewDomain.trim() === '') {
-			logger.error('FATAL: env.CUSTOM_DOMAIN is not configured in wrangler.toml or the Cloudflare dashboard.');
-			return new Response('Server configuration error: Application domain is not set.', { status: 500 });
+			// For Cloud Run, use the hostname as the domain
+			const url = new URL(request.url);
+			const hostname = url.hostname;
+			
+			// If it's a Cloud Run URL, use it as the domain
+			if (hostname.endsWith('.run.app')) {
+				logger.info(`Using Cloud Run hostname as domain: ${hostname}`);
+				// Set a mock preview domain for Cloud Run
+				(env as any).CUSTOM_DOMAIN = hostname;
+			} else {
+				logger.error('FATAL: env.CUSTOM_DOMAIN is not configured and not a Cloud Run URL.');
+				return new Response('Server configuration error: Application domain is not set.', { status: 500 });
+			}
 		}
 
 		const url = new URL(request.url);
@@ -353,48 +349,91 @@ const worker = {
 		// --- Domain-based Routing ---
 
 		// Normalize hostnames for both local development (localhost) and production.
+		// Handle Cloud Run URLs (e.g., *.run.app) as main domain requests
+		const isCloudRunUrl = hostname.endsWith('.run.app');
 		const isMainDomainRequest =
-			hostname === env.CUSTOM_DOMAIN || hostname === 'localhost';
+			hostname === env.CUSTOM_DOMAIN || 
+			hostname === 'localhost' ||
+			isCloudRunUrl;
 		const isSubdomainRequest =
 			hostname.endsWith(`.${previewDomain}`) ||
 			(hostname.endsWith('.localhost') && hostname !== 'localhost');
 
 		// Route 1: Main Platform Request (e.g., build.cloudflare.dev or localhost)
 		if (isMainDomainRequest) {
-			// Serve static assets for all non-API routes from the object store in GCP,
-			// falling back to the legacy ASSETS binding when available.
-			if (!pathname.startsWith('/api/')) {
-				if (runtimeProvider === 'gcp') {
-					const assetResponse = await serveAssetFromObjectStore(request, env);
-					if (assetResponse) {
-						return assetResponse;
-					}
-					logger.warn(`Asset not found in GCS for path: ${pathname}, falling back to legacy binding.`);
-				}
-				if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
-					return env.ASSETS.fetch(request);
-				}
-				return new Response('Not Found', { status: 404 });
-			}
-			// AI Gateway proxy for generated apps
-			if (pathname.startsWith('/api/proxy/openai')) {
-                // Only handle requests from valid origins of the preview domain
-                const origin = request.headers.get('Origin');
-                const previewDomain = getPreviewDomain(env);
-
-                logger.info(`Origin: ${origin}, Preview Domain: ${previewDomain}`);
-                
-                return proxyToAiGateway(request, env, ctx);
-				// if (origin && origin.endsWith(`.${previewDomain}`)) {
-                //     return proxyToAiGateway(request, env, ctx);
-                // }
-                // logger.warn(`Access denied. Invalid origin: ${origin}, preview domain: ${previewDomain}`);
-                // return new Response('Access denied. Invalid origin.', { status: 403 });
-			}
-			// Handle all API requests with the main Hono application.
-			logger.info(`Handling API request for: ${url}`);
+		// Handle API requests and health endpoints (but NOT root path)
+		if (pathname.startsWith('/api/') || pathname === '/health') {
 			const app = createApp(env);
-			return app.fetch(request, env, ctx);
+			const response = await app.fetch(request, env, ctx);
+			
+			// Add explicit CORS headers for all API responses
+			const headers = new Headers(response.headers);
+			const origin = request.headers.get('Origin');
+			if (origin) {
+				headers.set('Access-Control-Allow-Origin', origin);
+			}
+			headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+			headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-CSRF-Token');
+			headers.set('Access-Control-Allow-Credentials', 'false');
+			
+			return new Response(response.body, {
+				status: response.status,
+				statusText: response.statusText,
+				headers: headers
+			});
+		}
+		
+		// Debug endpoint to check environment variables
+		if (pathname === '/debug-env') {
+			const debugInfo = {
+				runtimeProvider: getRuntimeProvider(env),
+				gcsFrontendBucket: env.GCS_FRONTEND_BUCKET,
+				gcsTemplatesBucket: env.GCS_TEMPLATES_BUCKET,
+				customDomain: env.CUSTOM_DOMAIN,
+				hostname: hostname,
+				pathname: pathname,
+				allEnvVars: Object.keys(env).filter(key => key.startsWith('GCS'))
+			};
+			return new Response(JSON.stringify(debugInfo, null, 2), {
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+			
+		// For root path, serve the frontend HTML
+		if (pathname === '/') {
+			logger.info(`Root path requested, runtimeProvider: ${runtimeProvider}`);
+			// Try to serve from GCS first, then fall back to legacy binding
+			try {
+				logger.info(`Attempting to serve from GCS for path: ${pathname}`);
+				const assetResponse = await serveAssetFromObjectStore(request, env);
+				if (assetResponse) {
+					logger.info(`Successfully served asset from GCS for path: ${pathname}`);
+					return assetResponse;
+				}
+				logger.warn(`Asset not found in GCS for path: ${pathname}, falling back to legacy binding.`);
+			} catch (error) {
+				logger.error(`Error serving from GCS for path: ${pathname}`, { error: error instanceof Error ? error.message : String(error) });
+			}
+			// Fall back to legacy binding for root path
+			if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+				return env.ASSETS.fetch(request);
+			}
+			return new Response('Not Found', { status: 404 });
+		}
+			
+			// Serve static assets for all other routes from the object store in GCP,
+			// falling back to the legacy ASSETS binding when available.
+			if (runtimeProvider === 'gcp') {
+				const assetResponse = await serveAssetFromObjectStore(request, env);
+				if (assetResponse) {
+					return assetResponse;
+				}
+				logger.warn(`Asset not found in GCS for path: ${pathname}, falling back to legacy binding.`);
+			}
+			if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+				return env.ASSETS.fetch(request);
+			}
+			return new Response('Not Found', { status: 404 });
 		}
 
 		// Route 2: User App Request (e.g., xyz.build.cloudflare.dev or test.localhost)
