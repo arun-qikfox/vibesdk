@@ -75,10 +75,31 @@ function main() {
 	mkdirSync(contextDir, { recursive: true });
 
 	try {
-		// Copy application source into the context.
-		copyContents(sourceDir, contextDir);
-		// Overlay Docker template files.
-		copyContents(templateDir, contextDir);
+		// Copy only the worker bundle (compiled output)
+		const workerBundleDir = join(sourceDir, 'dist', 'worker-bundle');
+		if (existsSync(workerBundleDir)) {
+			const destBundleDir = join(contextDir, 'dist', 'worker-bundle');
+			mkdirSync(join(contextDir, 'dist'), { recursive: true });
+			copyContents(workerBundleDir, destBundleDir);
+		} else {
+			throw new Error(`Worker bundle not found at ${workerBundleDir}. Run 'npm run build:worker' first.`);
+		}
+
+		// Copy only necessary Docker files
+		const dockerfile = join(sourceDir, 'container', 'Dockerfile.workerd');
+		const workerdConfig = join(sourceDir, 'container', 'workerd');
+		
+		if (existsSync(dockerfile)) {
+			cpSync(dockerfile, join(contextDir, 'Dockerfile.workerd'));
+		} else {
+			throw new Error(`Dockerfile not found at ${dockerfile}`);
+		}
+		
+		if (existsSync(workerdConfig)) {
+			copyContents(workerdConfig, join(contextDir, 'workerd'));
+		} else {
+			throw new Error(`Workerd config not found at ${workerdConfig}`);
+		}
 
 		const tarResult = spawnSync('tar', ['-czf', outputPath, '-C', contextDir, '.'], {
 			stdio: 'inherit',

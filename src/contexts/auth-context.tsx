@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.warn('Failed to fetch auth providers:', error);
-      // Fallback to defaults
+      // Fallback to defaults - enable email auth even if API is not implemented
       setAuthProviders({ google: false, github: false, email: true });
       setHasOAuth(false);
       setRequiresEmailAuth(true);

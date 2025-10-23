@@ -55,6 +55,12 @@ declare namespace Cloudflare {
 		USE_CLOUDFLARE_IMAGES: boolean;
 		CF_VERSION_METADATA: WorkerVersionMetadata;
 		ASSETS: Fetcher;
+		// --- GCP specific environment bindings (added for Cloud Run runtime) ---
+		GCS_ASSETS_PREFIX?: string;
+		GCS_TEMPLATES_BUCKET?: string;
+		GCP_PROJECT_ID?: string;
+		GCP_REGION?: string;
+		DEFAULT_DEPLOYMENT_TARGET?: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

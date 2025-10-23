@@ -1,0 +1,12 @@
+{
+  "name": "vibesdk-frontend",
+  "version": "1.0.0",
+  "description": "VibSDK Frontend Service",
+  "main": "frontend-server.js",
+  "scripts": {
+    "start": "node frontend-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

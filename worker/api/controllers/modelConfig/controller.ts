@@ -1,11 +1,10 @@
-// Temporarily disabled due to database service issues
-/*
 import { BaseController } from '../baseController';
 import { RouteContext } from '../../types/route-context';
 import { ApiResponse, ControllerResponse } from '../types';
 import { ModelConfigService } from '../../../database/services/ModelConfigService';
 import { SecretsService } from '../../../database/services/SecretsService';
 import { ModelTestService } from '../../../database/services/ModelTestService';
+import { createDatabaseService } from '../../../database/database';
 import { 
     AgentActionKey, 
     ModelConfig
@@ -350,48 +349,5 @@ export class ModelConfigController extends BaseController {
             this.logger.error('Error deleting secret:', error);
             return ModelConfigController.createErrorResponse<SecretDeleteData>('Failed to delete secret', 500);
         }
-    }
-}
-*/
-
-// Temporary placeholder to prevent import errors
-import type { RouteContext } from '../../types/route-context';
-
-export class ModelConfigController {
-    static async getModelConfigs(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async updateModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async deleteModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async testModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getSecrets(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async createSecret(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async updateSecret(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async deleteSecret(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getDefaults(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getByokProviders(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getModelConfig(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async resetAllConfigs(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
     }
 }

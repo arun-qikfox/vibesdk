@@ -1,28 +1,17 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-bullseye AS builder
+FROM debian:bullseye-slim AS runtime
 WORKDIR /app
 
-# Install workerd CLI (used in runtime image).
-RUN npm install -g workerd@1.20251011.0
+# Install Node.js and workerd CLI
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://github.com/cloudflare/workerd/releases/download/v1.20251011.0/workerd-linux-x64 -o /usr/local/bin/workerd && \
+    chmod +x /usr/local/bin/workerd && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy package manifests then install production deps.
-COPY package.json package-lock.json ./
-RUN npm ci
-
-# Copy source code and build the worker bundle.
-COPY . ./
-RUN npm run build:worker
-
-FROM gcr.io/distroless/nodejs20-debian12:latest AS runtime
-WORKDIR /app
-
-# Copy workerd binary.
-COPY --from=builder /usr/local/bin/workerd /usr/local/bin/workerd
-
-# Copy bundle artifacts and workerd configuration.
-COPY --from=builder /app/dist/worker-bundle ./dist/worker-bundle
-COPY container/workerd ./workerd-config
+# Copy only the compiled worker bundle and workerd configuration.
+COPY dist/worker-bundle ./dist/worker-bundle
+COPY workerd ./workerd-config
 
 # Expose Cloud Run port.
 ENV PORT=8080

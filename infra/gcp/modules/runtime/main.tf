@@ -105,3 +105,12 @@ resource "google_cloud_run_v2_service" "this" {
     ]
   }
 }
+
+# Allow public access to the API
+resource "google_cloud_run_service_iam_member" "public_access" {
+  location = google_cloud_run_v2_service.this.location
+  project  = google_cloud_run_v2_service.this.project
+  service  = google_cloud_run_v2_service.this.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}

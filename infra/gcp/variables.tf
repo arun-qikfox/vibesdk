@@ -58,6 +58,12 @@ variable "sql_password_secret_id" {
   default     = "vibesdk-sql-app-password"
 }
 
+variable "sql_connection_secret_id" {
+  description = "Secret Manager secret ID used to persist the Cloud SQL connection URL."
+  type        = string
+  default     = "vibesdk-sql-connection-url"
+}
+
 variable "artifact_registry_repositories" {
   description = "List of Artifact Registry repositories to create."
   type        = list(string)

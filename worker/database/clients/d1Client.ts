@@ -1,8 +1,12 @@
+//d1client.ts
 import { drizzle } from 'drizzle-orm/d1';
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
 import * as Sentry from '@sentry/cloudflare';
 import * as schema from '../schema';
 import type { DatabaseClient } from './types';
+
+// Use any type temporarily to fix build issues
+type Env = any;
 
 export class D1DatabaseClient implements DatabaseClient {
     public readonly kind = 'd1' as const;

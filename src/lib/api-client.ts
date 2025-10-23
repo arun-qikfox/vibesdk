@@ -154,7 +154,7 @@ class ApiClient {
 	private csrfTokenInfo: CSRFTokenInfo | null = null;
 
 	constructor(config: ApiClientConfig = {}) {
-		this.baseUrl = config.baseUrl || '';
+		this.baseUrl = config.baseUrl || process.env.REACT_APP_API_URL || '';
 		this.defaultHeaders = {
 			'Content-Type': 'application/json',
 			...config.defaultHeaders,

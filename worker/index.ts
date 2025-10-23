@@ -18,6 +18,8 @@ import { ensureSecrets } from './utils/secretLoader';
 import { createAgentStore } from 'shared/platform/durableObjects';
 import type { AppDeploymentStatus } from './database/schema';
 import type { DatabaseRuntimeEnv } from './database/runtime/types';
+import { AppService } from './database/services/AppService';
+import { createDatabaseService } from './database/database';
 
 // Durable Object and Service exports
 export { UserAppSandboxService, DeployerService } from './services/sandbox/sandboxSdkClient';
@@ -39,7 +41,7 @@ function setOriginControl(env: Env, request: Request, currentHeaders: Headers): 
     return currentHeaders;
 }
 
-function buildAssetKeyCandidates(pathname: string): string[] {
+function buildAssetKeyCandidates(pathname: string, env: Env): string[] {
 	const cleanPath = pathname.replace(/[#?].*$/, '');
 	let key = cleanPath.replace(/^\/+/, '');
 	if (key === '') {
@@ -48,9 +50,19 @@ function buildAssetKeyCandidates(pathname: string): string[] {
 	if (key.endsWith('/')) {
 		key = `${key}index.html`;
 	}
+	
+	// For GCP runtime, prepend the assets prefix if configured
+	const runtimeProvider = getRuntimeProvider(env);
+	if (runtimeProvider === 'gcp' && env.GCS_ASSETS_PREFIX) {
+		key = `${env.GCS_ASSETS_PREFIX}/${key}`;
+	}
+	
 	const candidates = [key];
 	if (!key.endsWith('.html')) {
-		candidates.push('index.html');
+		const fallbackKey = runtimeProvider === 'gcp' && env.GCS_ASSETS_PREFIX 
+			? `${env.GCS_ASSETS_PREFIX}/index.html`
+			: 'index.html';
+		candidates.push(fallbackKey);
 	}
 	return [...new Set(candidates)];
 }
@@ -90,7 +102,7 @@ async function responseFromStoreResult(
 async function serveAssetFromObjectStore(request: Request, env: Env): Promise<Response | null> {
 	const store = createObjectStore(env as unknown as Record<string, unknown>);
 	const url = new URL(request.url);
-	const candidates = buildAssetKeyCandidates(url.pathname);
+	const candidates = buildAssetKeyCandidates(url.pathname, env);
 	for (const key of candidates) {
 		try {
 			const asset = await store.get(key);
@@ -150,15 +162,36 @@ async function proxyCloudRunAppRequest(request: Request, env: Env): Promise<Resp
 		return new Response('Preview environment not found.', { status: 404 });
 	}
 
-	// Simplified for GCP deployment - return a basic response
-	// In production, this would check PostgreSQL for app and deployment info
-	return new Response('QFX Cloud App Preview - Feature coming soon', { 
-		status: 200,
-		headers: {
-			'Content-Type': 'text/html',
-			'X-Preview-Type': 'cloud-run'
+	// Check database for app and deployment info
+	try {
+		const databaseService = createDatabaseService(env);
+		const appService = new AppService(env);
+		
+		// Get app by deployment key
+		const app = await appService.getAppByDeploymentKey(deploymentKey);
+		if (!app) {
+			return new Response('Preview environment not found.', { status: 404 });
 		}
-	});
+
+		// Check if app has a Cloud Run deployment
+		if (!app.deploymentId) {
+			return new Response('Preview environment not deployed.', { status: 404 });
+		}
+
+		// Proxy to Cloud Run service
+		const cloudRunUrl = `https://${app.deploymentId}-${env.GCP_PROJECT_ID}.${env.GCP_REGION}.run.app${url.pathname}${url.search}`;
+		const cloudRunRequest = new Request(cloudRunUrl, {
+			method: request.method,
+			headers: request.headers,
+			body: request.body
+		});
+
+		const response = await fetch(cloudRunRequest);
+		return response;
+	} catch (error) {
+		logger.error('Error proxying to Cloud Run:', error);
+		return new Response('Preview environment error.', { status: 500 });
+	}
 }
 
 /**
@@ -323,8 +356,31 @@ const worker = {
 
 		// Route 1: Main Platform Request (e.g., build.cloudflare.dev or localhost)
 		if (isMainDomainRequest) {
-			// Handle API requests and root/health endpoints
-			if (pathname.startsWith('/api/') || pathname === '/' || pathname === '/health') {
+			// Handle API requests and health endpoints (but NOT root path)
+			if (pathname.startsWith('/api/') || pathname === '/health') {
+				const app = createApp(env);
+				return app.fetch(request, env, ctx);
+			}
+			
+			// For root path, serve the frontend HTML
+			if (pathname === '/') {
+				logger.info(`Root path requested, runtimeProvider: ${runtimeProvider}, GCS_ASSETS_PREFIX: ${env.GCS_ASSETS_PREFIX}`);
+				// Try to serve index.html from GCS first
+				if (runtimeProvider === 'gcp') {
+					const assetResponse = await serveAssetFromObjectStore(request, env);
+					if (assetResponse) {
+						logger.info('Successfully served index.html from GCS');
+						return assetResponse;
+					}
+					logger.warn('Failed to serve index.html from GCS, falling back to legacy ASSETS');
+				}
+				// Fallback to legacy ASSETS binding
+				if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+					logger.info('Using legacy ASSETS binding for index.html');
+					return env.ASSETS.fetch(request);
+				}
+				// If no assets available, return API response as fallback
+				logger.warn('No assets available, returning API response as fallback');
 				const app = createApp(env);
 				return app.fetch(request, env, ctx);
 			}

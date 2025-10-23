@@ -28,6 +28,7 @@ const config :Workerd.Config = (
          (name = "USE_CLOUDFLARE_IMAGES", fromEnvironment = "USE_CLOUDFLARE_IMAGES"),
          (name = "SANDBOX_TOPIC", fromEnvironment = "SANDBOX_TOPIC"),
          (name = "GCS_TEMPLATES_BUCKET", fromEnvironment = "GCS_TEMPLATES_BUCKET"),
+         (name = "GCS_ASSETS_PREFIX", fromEnvironment = "GCS_ASSETS_PREFIX"),
          (name = "FIRESTORE_PROJECT_ID", fromEnvironment = "FIRESTORE_PROJECT_ID"),
          (name = "AI_GATEWAY_URL", fromEnvironment = "AI_GATEWAY_URL"),
          (name = "AI_GATEWAY_API_KEY", fromEnvironment = "AI_GATEWAY_API_KEY"),

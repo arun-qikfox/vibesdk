@@ -1,10 +1,9 @@
-// Temporarily disabled due to database service issues
-/*
 import { BaseController } from '../baseController';
 import { RouteContext } from '../../types/route-context';
 import { ApiResponse, ControllerResponse } from '../types';
 import { SecretsService } from '../../../database/services/SecretsService';
 import { ModelProvidersService } from '../../../database/services/ModelProvidersService';
+import { createDatabaseService } from '../../../database/database';
 import { z } from 'zod';
 import {
     ModelProvidersListData,
@@ -271,48 +270,5 @@ export class ModelProvidersController extends BaseController {
             this.logger.error('Error testing model provider:', error);
             return ModelProvidersController.createErrorResponse<ModelProviderTestResultData>('Failed to test model provider', 500);
         }
-    }
-}
-*/
-
-// Temporary placeholder to prevent import errors
-import type { RouteContext } from '../../types/route-context';
-
-export class ModelProvidersController {
-    static async getModelProviders(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getModelProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async createModelProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async updateModelProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async deleteModelProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async testModelProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getProviders(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async createProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async updateProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async deleteProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async testProvider(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
     }
 }

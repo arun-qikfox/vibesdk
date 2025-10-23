@@ -81,3 +81,19 @@ export class DatabaseService {
 export function createDatabaseService(env: DatabaseRuntimeEnv): DatabaseService {
     return new DatabaseService(env);
 }
+
+// ========================================
+// SERVICE EXPORTS
+// ========================================
+
+// Re-export all service classes for easy importing
+export { AuthService } from './services/AuthService';
+export { AppService } from './services/AppService';
+export { UserService } from './services/UserService';
+export { SessionService } from './services/SessionService';
+export { AnalyticsService } from './services/AnalyticsService';
+export { ModelConfigService } from './services/ModelConfigService';
+export { ModelTestService } from './services/ModelTestService';
+export { SecretsService } from './services/SecretsService';
+export { ApiKeyService } from './services/ApiKeyService';
+export { ModelProvidersService } from './services/ModelProvidersService';

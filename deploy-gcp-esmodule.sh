@@ -374,7 +374,7 @@ gcloud run deploy ${SERVICE_NAME} \
     --region ${REGION} \
     --platform managed \
     --port 8080 \
-    --set-env-vars QFX_ENV=production,GEMINI_API_KEY=${GEMINI_API_KEY} \
+    --set-env-vars QFX_ENV=production,GEMINI_API_KEY=${GEMINI_API_KEY},REACT_APP_API_URL=https://vibesdk-control-plane-2pklfi2owa-uc.a.run.app \
     --update-secrets=DATABASE_URL=vibesdk-sql-connection-url:latest \
     --project ${PROJECT_ID}
 

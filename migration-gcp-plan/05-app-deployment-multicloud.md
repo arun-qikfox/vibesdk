@@ -49,6 +49,7 @@ Implementation notes (Step 2):
 - New helper script `npm run cloudrun:context` (see `scripts/create-cloudrun-context.ts`) packages a sandbox workspace and template assets into a `.tar.gz` ready for Cloud Build or manual builds.
 - `cloudbuild/app-deploy.yaml` builds, pushes, and deploys the image with configurable substitutions so triggers can supply service name, region, and context location.
 - `entrypoint.sh` serves static builds with `serve@14` when no explicit server is defined, covering purely static apps without extra configuration.
+- **Frontend deployment**: Implemented GCS asset serving for the main platform frontend. Frontend assets are uploaded to `gs://vibesdk-templates/frontend-assets/` during deployment and served by the workerd container using `GCS_ASSETS_PREFIX` environment variable.
 
 ### Step 3: Metadata and Routing
 - [ ] Create Cloud SQL table `app_deployments` with columns (`app_id`, `version`, `target`, `service_url`, `status`, `created_at`).

@@ -1,10 +1,9 @@
-// Temporarily disabled due to database service issues
-/*
 import { BaseController } from '../baseController';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
 import { UserService } from '../../../database/services/UserService';
 import { AppService } from '../../../database/services/AppService';
+import { createDatabaseService } from '../../../database/database';
 import { Visibility, AppSortOption, SortOrder, TimePeriod } from '../../../database/types';
 import { UserAppsData, ProfileUpdateData } from './types';
 import { createLogger } from '../../../logger';
@@ -115,21 +114,5 @@ export class UserController extends BaseController {
             this.logger.error('Error updating profile:', error);
             return UserController.createErrorResponse<ProfileUpdateData>('Failed to update profile', 500);
         }
-    }
-}
-*/
-
-// Temporary placeholder to prevent import errors
-import type { RouteContext } from '../../types/route-context';
-
-export class UserController {
-    static async getUserApps(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async updateProfile(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getApps(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
     }
 }

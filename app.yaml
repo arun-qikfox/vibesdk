@@ -1,0 +1,27 @@
+runtime: nodejs20
+
+env_variables:
+  REACT_APP_API_URL: "https://vibesdk-control-plane-2pklfi2owa-uc.a.run.app"
+
+handlers:
+  # Serve static files
+  - url: /assets
+    static_dir: dist/client/assets
+    secure: always
+
+  # Serve favicon
+  - url: /favicon.ico
+    static_files: dist/client/favicon.ico
+    upload: dist/client/favicon.ico
+    secure: always
+
+  # Serve all other files
+  - url: /.*
+    static_files: dist/client/index.html
+    upload: dist/client/index.html
+    secure: always
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6

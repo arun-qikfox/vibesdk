@@ -14,14 +14,15 @@ module "networking" {
 }
 
 module "sql" {
-  source             = "./modules/sql"
-  project_id         = local.project_id
-  region             = local.region
-  instance_name      = var.sql_instance_name
-  database_name      = var.sql_database_name
-  user_name          = var.sql_user_name
-  password_secret_id = var.sql_password_secret_id
-  private_network    = module.networking.vpc_id
+  source                = "./modules/sql"
+  project_id            = local.project_id
+  region                = local.region
+  instance_name         = var.sql_instance_name
+  database_name         = var.sql_database_name
+  user_name             = var.sql_user_name
+  password_secret_id    = var.sql_password_secret_id
+  connection_secret_id  = var.sql_connection_secret_id
+  private_network       = module.networking.vpc_id
 }
 
 module "iam" {
@@ -148,6 +149,46 @@ resource "google_project_service" "artifactregistry" {
   service = "artifactregistry.googleapis.com"
 }
 
+resource "google_project_service" "sqladmin" {
+  project = local.project_id
+  service = "sqladmin.googleapis.com"
+}
+
+resource "google_project_service" "secretmanager" {
+  project = local.project_id
+  service = "secretmanager.googleapis.com"
+}
+
+resource "google_project_service" "servicenetworking" {
+  project = local.project_id
+  service = "servicenetworking.googleapis.com"
+}
+
+resource "google_project_service" "compute" {
+  project = local.project_id
+  service = "compute.googleapis.com"
+}
+
+resource "google_project_service" "vpcaccess" {
+  project = local.project_id
+  service = "vpcaccess.googleapis.com"
+}
+
+resource "google_project_service" "pubsub" {
+  project = local.project_id
+  service = "pubsub.googleapis.com"
+}
+
+resource "google_project_service" "storage" {
+  project = local.project_id
+  service = "storage.googleapis.com"
+}
+
+resource "google_project_service" "iam" {
+  project = local.project_id
+  service = "iam.googleapis.com"
+}
+
 # --- Add: Cloud Build can manage Cloud Run services
 resource "google_project_iam_member" "cb_run_developer" {
   project = local.project_id
@@ -156,7 +197,15 @@ resource "google_project_iam_member" "cb_run_developer" {
 
   depends_on = [
     google_project_service.run,
-    google_project_service.cloudbuild
+    google_project_service.cloudbuild,
+    google_project_service.sqladmin,
+    google_project_service.secretmanager,
+    google_project_service.servicenetworking,
+    google_project_service.compute,
+    google_project_service.vpcaccess,
+    google_project_service.pubsub,
+    google_project_service.storage,
+    google_project_service.iam
   ]
 }
 

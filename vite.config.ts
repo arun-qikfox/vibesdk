@@ -66,6 +66,9 @@ export default defineConfig({
 		'process.env.NODE_ENV': JSON.stringify(
 			process.env.NODE_ENV || 'development',
 		),
+		'process.env.REACT_APP_API_URL': JSON.stringify(
+			process.env.REACT_APP_API_URL || '',
+		),
 		global: 'globalThis',
 		// '__filename': '""',
 		// '__dirname': '""',

@@ -1,10 +1,9 @@
-// Temporarily disabled due to database service issues
-/*
 import { BaseController } from '../baseController';
 import { RouteContext } from '../../types/route-context';
 import { ApiResponse, ControllerResponse } from '../types';
 import { UserStatsData, UserActivityData } from './types';
 import { AnalyticsService } from '../../../database/services/AnalyticsService';
+import { createDatabaseService } from '../../../database/database';
 import { createLogger } from '../../../logger';
 
 export class StatsController extends BaseController {
@@ -55,18 +54,5 @@ export class StatsController extends BaseController {
             this.logger.error('Error fetching user activity:', error);
             return StatsController.createErrorResponse<UserActivityData>('Failed to fetch user activity', 500);
         }
-    }
-}
-*/
-
-// Temporary placeholder to prevent import errors
-import type { RouteContext } from '../../types/route-context';
-
-export class StatsController {
-    static async getUserStats(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
-    }
-    static async getUserActivity(_request: Request, _env: Env, _ctx: ExecutionContext, _context: RouteContext) {
-        return new Response(JSON.stringify({ success: false, error: 'Feature temporarily disabled' }), { status: 503 });
     }
 }

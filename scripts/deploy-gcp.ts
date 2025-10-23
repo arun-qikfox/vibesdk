@@ -104,6 +104,42 @@ class GcpDeploymentManager {
 	}
 
 	/**
+	 * Uploads frontend assets to GCS bucket
+	 */
+	private uploadFrontendAssets(): void {
+		console.log('📤 Uploading frontend assets to GCS...');
+
+		try {
+			const bucketName = 'vibesdk-templates';
+			const frontendAssetsPath = join(PROJECT_ROOT, 'dist', 'client');
+			const gcsPath = `gs://${bucketName}/frontend-assets/`;
+
+			// Check if frontend assets directory exists
+			if (!existsSync(frontendAssetsPath)) {
+				throw new Error(`Frontend assets directory not found: ${frontendAssetsPath}`);
+			}
+
+			// Upload using gsutil rsync
+			execSync(`gsutil -m rsync -r -d "${frontendAssetsPath}" "${gcsPath}"`, {
+				stdio: 'inherit',
+				cwd: PROJECT_ROOT,
+				env: {
+					...process.env,
+					GCLOUD_PROJECT: this.projectId,
+					GOOGLE_CLOUD_PROJECT: this.projectId,
+				}
+			});
+
+			console.log(`✅ Frontend assets uploaded to ${gcsPath}`);
+		} catch (error) {
+			throw new GcpDeploymentError(
+				'Failed to upload frontend assets to GCS',
+				error instanceof Error ? error : new Error(String(error))
+			);
+		}
+	}
+
+	/**
 	 * Builds the worker bundle for Cloud Run deployment
 	 */
 	private buildWorkerBundle(): void {
@@ -234,6 +270,7 @@ class GcpDeploymentManager {
 				`SANDBOX_SUBSCRIPTION=vibesdk-sandbox-requests-subscription`,
 				`SANDBOX_RUN_COLLECTION=sandboxRuns`,
 				`GCS_TEMPLATES_BUCKET=vibesdk-templates`,
+				`GCS_ASSETS_PREFIX=frontend-assets`,
 				`FIRESTORE_PROJECT_ID=${this.projectId}`,
 				`FIRESTORE_COLLECTION=vibesdk-kv`
 			];
@@ -314,28 +351,33 @@ class GcpDeploymentManager {
 			this.buildFrontendAssets();
 			console.log('✅ Frontend assets build completed!\n');
 
-			// Step 3: Build worker bundle
-			console.log('📋 Step 3: Building worker bundle...');
+			// Step 3: Upload frontend assets to GCS
+			console.log('📋 Step 3: Uploading frontend assets to GCS...');
+			this.uploadFrontendAssets();
+			console.log('✅ Frontend assets upload completed!\n');
+
+			// Step 4: Build worker bundle
+			console.log('📋 Step 4: Building worker bundle...');
 			this.buildWorkerBundle();
 			console.log('✅ Worker bundle build completed!\n');
 
-			// Step 4: Build and push Docker image
-			console.log('📋 Step 4: Building and pushing Docker image...');
+			// Step 5: Build and push Docker image
+			console.log('📋 Step 5: Building and pushing Docker image...');
 			const imageUri = this.buildAndPushImage();
 			console.log('✅ Docker image build and push completed!\n');
 
-			// Step 5: Deploy Cloud Run service
-			console.log('📋 Step 5: Deploying Cloud Run service...');
+			// Step 6: Deploy Cloud Run service
+			console.log('📋 Step 6: Deploying Cloud Run service...');
 			const serviceUrl = this.deployCloudRunService(imageUri);
 			console.log('✅ Cloud Run service deployment completed!\n');
 
-			// Step 6: Update environment variables
-			console.log('📋 Step 6: Updating environment variables...');
+			// Step 7: Update environment variables
+			console.log('📋 Step 7: Updating environment variables...');
 			this.updateEnvironmentVariables();
 			console.log('✅ Environment variables update completed!\n');
 
-			// Step 7: Run database migrations
-			console.log('📋 Step 7: Running database migrations...');
+			// Step 8: Run database migrations
+			console.log('📋 Step 8: Running database migrations...');
 			this.runDatabaseMigrations();
 			console.log('✅ Database migrations completed!\n');
 

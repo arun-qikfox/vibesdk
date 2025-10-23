@@ -1,23 +1,51 @@
 steps:
-  - name: gcr.io/cloud-builders/docker
-    id: Build workerd image
+  # 1) Fetch and unpack the secure Docker build context
+  - name: gcr.io/cloud-builders/gsutil
+    entrypoint: bash
     args:
-      [
-        "build",
-        "-f",
-        "container/Dockerfile.workerd",
-        "-t",
-        "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:${COMMIT_SHA}",
-        ".",
-      ]
+      - -cu
+      - |
+        echo "Downloading secure build context from GCS..."
+        gsutil cp gs://vibesdk-templates-contexts/cloudrun-context.tar.gz /workspace/context.tar.gz
+        mkdir -p /workspace/context
+        tar -xzf /workspace/context.tar.gz -C /workspace/context
 
+  # 2) Build & push image (compute a timestamp tag at runtime)
   - name: gcr.io/cloud-builders/docker
-    id: Push workerd image
+    entrypoint: bash
     args:
-      [
-        "push",
-        "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:${COMMIT_SHA}",
-      ]
+      - -ceu
+      - |
+        IMG_TAG="$$(date +%Y%m%d-%H%M%S)"
+        echo "$$IMG_TAG" > /workspace/img_tag
+        FULL_URI="${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:$${IMG_TAG}"
+
+        echo "Using image tag: $$IMG_TAG"
+        echo "Full image URI: $$FULL_URI"
+
+        docker build --file /workspace/context/Dockerfile.workerd \
+                     --tag "$$FULL_URI" /workspace/context
+        docker push "$$FULL_URI"
+
+  # 3) Update Cloud Run service with new image
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        IMG_TAG="$$(cat /workspace/img_tag)"
+        FULL_URI="${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:$${IMG_TAG}"
+        
+        echo "Updating Cloud Run service with image: $$FULL_URI"
+        gcloud run services update ${_SERVICE_NAME} \
+          --image="$$FULL_URI" \
+          --region=${_LOCATION} \
+          --project=${PROJECT_ID}
+
+substitutions:
+  _LOCATION: us-central1
+  _REPOSITORY: vibesdk
+  _SERVICE_NAME: workerd
 
 images:
   - "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:${COMMIT_SHA}"

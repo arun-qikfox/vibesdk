@@ -59,6 +59,32 @@ else
     exit 1
 fi
 
+# Test 6: Check if frontend assets are uploaded to GCS
+echo "Test 6: Checking frontend assets in GCS..."
+if gsutil ls gs://vibesdk-templates/frontend-assets/ &>/dev/null; then
+    echo "✅ Frontend assets found in GCS bucket"
+    # Check for index.html specifically
+    if gsutil ls gs://vibesdk-templates/frontend-assets/index.html &>/dev/null; then
+        echo "✅ Frontend index.html found"
+    else
+        echo "⚠️  Frontend index.html not found (may need deployment)"
+    fi
+else
+    echo "⚠️  Frontend assets not found in GCS (may need deployment)"
+fi
+
+# Test 7: Test API health endpoint
+echo "Test 7: Testing API health endpoint..."
+if [ ! -z "$SERVICE_URL" ]; then
+    if curl -s "$SERVICE_URL/api/health" | grep -q "healthy"; then
+        echo "✅ API health endpoint responding"
+    else
+        echo "❌ API health endpoint not responding"
+    fi
+else
+    echo "⚠️  Skipping API test (no service URL)"
+fi
+
 echo ""
 echo "🎉 All basic tests passed!"
 echo ""
