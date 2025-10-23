@@ -389,14 +389,40 @@ const worker = {
 				runtimeProvider: getRuntimeProvider(env),
 				gcsFrontendBucket: env.GCS_FRONTEND_BUCKET,
 				gcsTemplatesBucket: env.GCS_TEMPLATES_BUCKET,
+				firestoreProjectId: env.FIRESTORE_PROJECT_ID,
+				firestoreCollection: env.FIRESTORE_COLLECTION,
 				customDomain: env.CUSTOM_DOMAIN,
 				hostname: hostname,
 				pathname: pathname,
-				allEnvVars: Object.keys(env).filter(key => key.startsWith('GCS'))
+				databaseUrl: env.DATABASE_URL ? 'SET' : 'NOT_SET',
+				allEnvVars: Object.keys(env).filter(key => key.startsWith('GCS') || key.startsWith('FIRESTORE') || key === 'DATABASE_URL')
 			};
 			return new Response(JSON.stringify(debugInfo, null, 2), {
 				headers: { 'Content-Type': 'application/json' }
 			});
+		}
+
+		// Test metadata server access
+		if (pathname === '/test-metadata') {
+			try {
+				const { getAccessToken } = await import('../shared/platform/gcp/auth');
+				const token = await getAccessToken(env);
+				return new Response(JSON.stringify({
+					success: true,
+					hasToken: !!token,
+					tokenLength: token?.length || 0,
+					tokenPrefix: token?.substring(0, 10) || 'none'
+				}, null, 2), {
+					headers: { 'Content-Type': 'application/json' }
+				});
+			} catch (error) {
+				return new Response(JSON.stringify({
+					success: false,
+					error: error instanceof Error ? error.message : String(error)
+				}, null, 2), {
+					headers: { 'Content-Type': 'application/json' }
+				});
+			}
 		}
 			
 		// For root path, serve the frontend HTML

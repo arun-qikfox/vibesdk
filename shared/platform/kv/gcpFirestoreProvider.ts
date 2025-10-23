@@ -24,15 +24,24 @@ export class GcpFirestoreKVProvider implements KVProvider {
 	private readonly disabledReason?: string;
 
 	constructor(env: unknown) {
+		console.log('[GCP-KV] Constructor called with env:', {
+			hasEnv: !!env,
+			envKeys: env ? Object.keys(env as Record<string, unknown>) : []
+		});
+
 		const record = (env ?? {}) as EnvRecord;
 
 		this.useInMemory = record.KV_IN_MEMORY === true;
 		this.memoryStore = new Map<string, MemoryEntry>();
 
+		console.log('[GCP-KV] Memory mode:', this.useInMemory);
+
 		this.collectionName =
 			(typeof record.FIRESTORE_COLLECTION === 'string' && record.FIRESTORE_COLLECTION.trim().length > 0
 				? record.FIRESTORE_COLLECTION
 				: process.env.FIRESTORE_COLLECTION) || DEFAULT_COLLECTION;
+
+		console.log('[GCP-KV] Collection name:', this.collectionName);
 
 		this.projectId =
 			(typeof record.FIRESTORE_PROJECT_ID === 'string' && record.FIRESTORE_PROJECT_ID.trim().length > 0
@@ -41,10 +50,14 @@ export class GcpFirestoreKVProvider implements KVProvider {
 			process.env.GCP_PROJECT_ID ||
 			process.env.GOOGLE_CLOUD_PROJECT;
 
+		console.log('[GCP-KV] Project ID:', this.projectId);
+
 		const emulatorHost =
 			typeof record.FIRESTORE_EMULATOR_HOST === 'string'
 				? record.FIRESTORE_EMULATOR_HOST
 				: process.env.FIRESTORE_EMULATOR_HOST;
+
+		console.log('[GCP-KV] Emulator host:', emulatorHost);
 
 		if (emulatorHost) {
 			process.env.FIRESTORE_EMULATOR_HOST = emulatorHost;
@@ -53,27 +66,46 @@ export class GcpFirestoreKVProvider implements KVProvider {
 		if (!this.useInMemory && !this.projectId) {
 			this.disabledReason =
 				'GCP KV provider is not yet implemented. Please configure Firestore/Redis integration.';
+			console.log('[GCP-KV] Provider disabled:', this.disabledReason);
+		} else {
+			console.log('[GCP-KV] Provider enabled and ready');
 		}
 	}
 
 	async get<T = unknown>(key: string, options?: KVGetOptions): Promise<T | null> {
+		console.log('[GCP-KV] get() called with key:', key, 'options:', options);
+		
 		if (this.useInMemory) {
+			console.log('[GCP-KV] Using in-memory store');
 			return this.readFromMemory<T>(key, options);
 		}
 		this.ensureEnabled();
 
+		console.log('[GCP-KV] Fetching document from Firestore');
 		const doc = await this.getDocument(key);
+		console.log('[GCP-KV] Document exists:', doc.exists);
+		
 		if (!doc.exists) {
+			console.log('[GCP-KV] Document not found, returning null');
 			return null;
 		}
 
 		const data = doc.data() as MemoryEntry;
+		console.log('[GCP-KV] Document data:', { 
+			hasValue: !!data.value, 
+			hasExpiration: !!data.expiration,
+			expiration: data.expiration 
+		});
+		
 		if (this.isExpired(data)) {
+			console.log('[GCP-KV] Document expired, deleting and returning null');
 			await doc.ref.delete().catch(() => undefined);
 			return null;
 		}
 
-		return this.deserializeValue<T>(data.value, options);
+		const result = this.deserializeValue<T>(data.value, options);
+		console.log('[GCP-KV] Returning deserialized value:', typeof result);
+		return result;
 	}
 
 	async put(key: string, value: string, options?: KVPutOptions): Promise<void> {
@@ -277,11 +309,15 @@ export class GcpFirestoreKVProvider implements KVProvider {
 	}
 
 	private async loadFirestoreModule() {
+		console.log('[GCP-KV] Loading Firestore module');
 		this.ensureEnabled();
 		if (!this.firestoreModulePromise) {
+			console.log('[GCP-KV] Importing @google-cloud/firestore module');
 			this.firestoreModulePromise = import('@google-cloud/firestore');
 		}
-		return this.firestoreModulePromise;
+		const module = await this.firestoreModulePromise;
+		console.log('[GCP-KV] Firestore module loaded successfully');
+		return module;
 	}
 
 	private async getFirestore() {
@@ -290,21 +326,32 @@ export class GcpFirestoreKVProvider implements KVProvider {
 		}
 		this.ensureEnabled();
 		if (!this.firestorePromise) {
+			console.log('[GCP-KV] Creating Firestore client with projectId:', this.projectId);
 			const { Firestore } = await this.loadFirestoreModule();
 			this.firestorePromise = Promise.resolve(new Firestore({ projectId: this.projectId }));
 		}
-		return this.firestorePromise;
+		const firestore = await this.firestorePromise;
+		console.log('[GCP-KV] Firestore client ready');
+		return firestore;
 	}
 
 	private async getCollection() {
+		console.log('[GCP-KV] Getting collection:', this.collectionName);
 		const firestore = await this.getFirestore();
-		return firestore.collection(this.collectionName);
+		const collection = firestore.collection(this.collectionName);
+		console.log('[GCP-KV] Collection reference obtained');
+		return collection;
 	}
 
 	private async getDocument(key: string) {
+		console.log('[GCP-KV] Getting document with key:', key);
 		this.ensureEnabled();
 		const collection = await this.getCollection();
-		return collection.doc(key).get();
+		const docRef = collection.doc(key);
+		console.log('[GCP-KV] Document reference created, fetching...');
+		const doc = await docRef.get();
+		console.log('[GCP-KV] Document fetch completed, exists:', doc.exists);
+		return doc;
 	}
 
 	private ensureEnabled(): void {
@@ -315,5 +362,13 @@ export class GcpFirestoreKVProvider implements KVProvider {
 }
 
 export function createGcpKVProvider(env: unknown): KVProvider {
-	return new GcpFirestoreKVProvider(env);
+	console.log('[GCP-KV] createGcpKVProvider called with env:', {
+		hasEnv: !!env,
+		envKeys: env ? Object.keys(env as Record<string, unknown>) : []
+	});
+	
+	const provider = new GcpFirestoreKVProvider(env);
+	console.log('[GCP-KV] GcpFirestoreKVProvider instance created');
+	
+	return provider;
 }

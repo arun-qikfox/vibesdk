@@ -94,9 +94,14 @@ type StoredConfig = DeepPartial<GlobalConfigurableSettings>;
 const CONFIG_KEY = 'platform_configs';
 
 export async function getGlobalConfigurableSettings(env: Env): Promise<GlobalConfigurableSettings> {
+    console.log('[Config] getGlobalConfigurableSettings called');
+    
     if (cachedConfig) {
+        console.log('[Config] Returning cached configuration');
         return cachedConfig;
     }
+    
+    console.log('[Config] Creating default configuration');
     // Get default configuration
     const defaultConfig: GlobalConfigurableSettings = {
         security: getConfigurableSecurityDefaults(),
@@ -107,26 +112,39 @@ export async function getGlobalConfigurableSettings(env: Env): Promise<GlobalCon
     };
     
     try {
+        console.log('[Config] Creating KV provider');
         // Try to fetch override config from KV
         const kv = createKVProvider(env);
+        console.log('[Config] KV provider created, fetching config with key:', CONFIG_KEY);
+        
         const storedConfigJson = await kv.get<string>(CONFIG_KEY);
+        console.log('[Config] KV get result:', { 
+            hasResult: !!storedConfigJson, 
+            resultType: typeof storedConfigJson,
+            resultLength: storedConfigJson ? storedConfigJson.length : 0
+        });
         
         if (!storedConfigJson) {
+            console.log('[Config] No stored config found, using defaults');
             // No stored config, use defaults
             return defaultConfig;
         }
         
+        console.log('[Config] Parsing stored configuration');
         // Parse stored configuration
         const storedConfig: StoredConfig = JSON.parse(storedConfigJson);
         
+        console.log('[Config] Merging configurations');
         // Deep merge configurations (stored config overrides defaults)
         const mergedConfig = deepMerge<GlobalConfigurableSettings>(defaultConfig, storedConfig);
         
         logger.info('Loaded configuration with overrides from KV', { storedConfig, mergedConfig });
         cachedConfig = mergedConfig;
+        console.log('[Config] Configuration loaded successfully from KV');
         return mergedConfig;
         
     } catch (error) {
+        console.log('[Config] Error loading configuration from KV:', error);
         logger.error('Failed to load configuration from KV, using defaults', error);
         // On error, fallback to default configuration
         return defaultConfig;

@@ -29,7 +29,9 @@ const config :Workerd.Config = (
          (name = "SANDBOX_TOPIC", fromEnvironment = "SANDBOX_TOPIC"),
          (name = "GCS_TEMPLATES_BUCKET", fromEnvironment = "GCS_TEMPLATES_BUCKET"),
          (name = "GCS_FRONTEND_BUCKET", fromEnvironment = "GCS_FRONTEND_BUCKET"),
+         (name = "GCS_KV_BUCKET", fromEnvironment = "GCS_KV_BUCKET"),
          (name = "FIRESTORE_PROJECT_ID", fromEnvironment = "FIRESTORE_PROJECT_ID"),
+         (name = "FIRESTORE_COLLECTION", fromEnvironment = "FIRESTORE_COLLECTION"),
          (name = "AI_GATEWAY_URL", fromEnvironment = "AI_GATEWAY_URL"),
          (name = "AI_GATEWAY_API_KEY", fromEnvironment = "AI_GATEWAY_API_KEY"),
          (name = "JWT_SECRET", fromEnvironment = "JWT_SECRET"),
@@ -37,6 +39,7 @@ const config :Workerd.Config = (
          (name = "WEBHOOK_SECRET", fromEnvironment = "WEBHOOK_SECRET"),
          (name = "AI_PROXY_JWT_SECRET", fromEnvironment = "AI_PROXY_JWT_SECRET"),
          (name = "GOOGLE_AI_STUDIO_API_KEY", fromEnvironment = "GOOGLE_AI_STUDIO_API_KEY"),
+         (name = "DATABASE_URL", fromEnvironment = "DATABASE_URL"),
          (name = "GCP_ACCESS_TOKEN", fromEnvironment = "GCP_ACCESS_TOKEN")
        ]
      )
