@@ -9,14 +9,81 @@ This guide provides step-by-step instructions for deploying the VibeSDK applicat
 - Docker installed
 - Access to the `qfxcloud-app-builder` GCP project
 - WSL/Linux environment (for Windows users)
+- Node.js and npm installed
 
 ## Overview
 
 The deployment process involves:
-1. Building and pushing Docker images to Google Artifact Registry
-2. Configuring environment variables across multiple files
-3. Deploying infrastructure using Terraform
-4. Verifying the deployment
+1. Setting up GCP authentication and access tokens
+2. Building and pushing Docker images to Google Artifact Registry
+3. Configuring environment variables across multiple files
+4. Initializing platform configuration in GCS KV store
+5. Deploying infrastructure using Terraform
+6. Verifying the deployment
+
+## Step 0: GCP Authentication Setup
+
+### 0.1 Authenticate with Google Cloud
+```bash
+# Login to Google Cloud
+gcloud auth login
+
+# Set the project
+gcloud config set project qfxcloud-app-builder
+
+# Enable required APIs
+gcloud services enable cloudbuild.googleapis.com
+gcloud services enable run.googleapis.com
+gcloud services enable storage.googleapis.com
+gcloud services enable artifactregistry.googleapis.com
+gcloud services enable secretmanager.googleapis.com
+gcloud services enable sqladmin.googleapis.com
+gcloud services enable pubsub.googleapis.com
+```
+
+### 0.2 Create and Configure Service Account
+```bash
+# Create service account for runtime
+gcloud iam service-accounts create vibesdk-runtime \
+  --display-name="VibeSDK Runtime Service Account" \
+  --description="Service account for VibeSDK runtime operations"
+
+# Grant necessary roles
+gcloud projects add-iam-policy-binding qfxcloud-app-builder \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+
+gcloud projects add-iam-policy-binding qfxcloud-app-builder \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud projects add-iam-policy-binding qfxcloud-app-builder \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
+
+gcloud projects add-iam-policy-binding qfxcloud-app-builder \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator"
+
+gcloud projects add-iam-policy-binding qfxcloud-app-builder \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/cloudsql.client"
+
+gcloud projects add-iam-policy-binding qfxcloud-app-builder \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/pubsub.publisher"
+```
+
+### 0.3 Generate GCP Access Token
+```bash
+# Generate a fresh access token (valid for 1 hour)
+gcloud auth print-access-token
+
+# For longer-lived tokens, use application default credentials
+gcloud auth application-default login
+```
+
+**Important**: Copy the access token output and use it in the `GCP_ACCESS_TOKEN` environment variable in `terraform.tfvars`.
 
 ## Step 1: Build and Push Docker Image
 
@@ -57,10 +124,14 @@ runtime_env = {
   # Storage configuration
   GCS_TEMPLATES_BUCKET      = "vibesdk-templates"
   GCS_FRONTEND_BUCKET       = "vibesdk-frontend"
+  GCS_KV_BUCKET             = "vibesdk-frontend"
   GCS_ASSETS_PREFIX         = "frontend-assets"
   
   # Authentication
   GCP_ACCESS_TOKEN          = "your-access-token-here"
+  
+  # Database configuration
+  DATABASE_URL              = "postgresql://user:password@host:port/database"
   
   # Domain configuration
   CUSTOM_DOMAIN             = "vibesdk-control-plane-2886014379.us-central1.run.app"
@@ -78,6 +149,10 @@ Add the environment variable to the TypeScript interface definitions:
 interface Env {
   // ... existing properties
   GCS_FRONTEND_BUCKET: string;
+  GCS_KV_BUCKET: string;
+  FIRESTORE_PROJECT_ID: string;
+  FIRESTORE_COLLECTION: string;
+  DATABASE_URL: string;
   // ... other properties
 }
 
@@ -86,6 +161,10 @@ interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env,
   "ALLOWED_EMAIL" | 
   // ... other properties
   "GCS_FRONTEND_BUCKET" | 
+  "GCS_KV_BUCKET" |
+  "FIRESTORE_PROJECT_ID" |
+  "FIRESTORE_COLLECTION" |
+  "DATABASE_URL" |
   // ... other properties
 >> {}
 ```
@@ -99,7 +178,10 @@ bindings = [
   // ... existing bindings
   (name = "GCS_TEMPLATES_BUCKET", fromEnvironment = "GCS_TEMPLATES_BUCKET"),
   (name = "GCS_FRONTEND_BUCKET", fromEnvironment = "GCS_FRONTEND_BUCKET"),
+  (name = "GCS_KV_BUCKET", fromEnvironment = "GCS_KV_BUCKET"),
   (name = "FIRESTORE_PROJECT_ID", fromEnvironment = "FIRESTORE_PROJECT_ID"),
+  (name = "FIRESTORE_COLLECTION", fromEnvironment = "FIRESTORE_COLLECTION"),
+  (name = "DATABASE_URL", fromEnvironment = "DATABASE_URL"),
   // ... other bindings
 ]
 ```
@@ -111,17 +193,79 @@ Use the environment variable in your worker code:
 ```typescript
 // In worker/index.ts or other worker files
 const frontendBucket = env.GCS_FRONTEND_BUCKET;
+const kvBucket = env.GCS_KV_BUCKET;
 ```
 
-## Step 3: Deploy Infrastructure with Terraform
+## Step 3: Initialize Platform Configuration
 
-### 3.1 Initialize Terraform
+### 3.1 Create Default Platform Configuration
+
+For greenfield deployments, you need to initialize the platform configuration in the GCS KV store. Create a file called `platform_configs.json`:
+
+```json
+{
+  "security": {
+    "rateLimit": {
+      "apiRateLimit": {
+        "enabled": true,
+        "store": "RATE_LIMITER",
+        "bindingName": "API_RATE_LIMITER"
+      },
+      "authRateLimit": {
+        "enabled": true,
+        "store": "RATE_LIMITER",
+        "bindingName": "AUTH_RATE_LIMITER"
+      },
+      "appCreation": {
+        "enabled": true,
+        "store": "DURABLE_OBJECT",
+        "limit": 10,
+        "dailyLimit": 50,
+        "period": 3600
+      },
+      "llmCalls": {
+        "enabled": true,
+        "store": "DURABLE_OBJECT",
+        "limit": 100,
+        "period": 3600,
+        "dailyLimit": 400,
+        "excludeBYOKUsers": true
+      }
+    }
+  },
+  "globalMessaging": {
+    "globalUserMessage": "",
+    "changeLogs": ""
+  }
+}
+```
+
+### 3.2 Upload Platform Configuration to GCS
+
+```bash
+# Upload the platform configuration to the KV bucket
+gcloud storage cp platform_configs.json gs://vibesdk-frontend/kv/platform_configs
+
+# Verify the upload
+gcloud storage cat gs://vibesdk-frontend/kv/platform_configs
+```
+
+**Location**: The configuration is stored at `gs://vibesdk-frontend/kv/platform_configs`
+
+**Purpose**: This configuration provides default settings for:
+- Rate limiting (API, auth, app creation, LLM calls)
+- Security settings
+- Global messaging configuration
+
+## Step 4: Deploy Infrastructure with Terraform
+
+### 4.1 Initialize Terraform
 ```bash
 cd infra/gcp
 terraform init
 ```
 
-### 3.2 Apply Terraform Configuration
+### 4.2 Apply Terraform Configuration
 ```bash
 # Deploy the infrastructure
 terraform apply -auto-approve
@@ -129,9 +273,9 @@ terraform apply -auto-approve
 
 **Note**: This command may show errors about destroying services with dependencies. These can be ignored as they don't affect the Cloud Run service deployment.
 
-## Step 4: Configure Service Permissions
+## Step 5: Configure Service Permissions
 
-### 4.1 Allow Unauthenticated Access
+### 5.1 Allow Unauthenticated Access
 ```bash
 # Allow public access to the Cloud Run service
 gcloud run services add-iam-policy-binding vibesdk-control-plane \
@@ -140,7 +284,7 @@ gcloud run services add-iam-policy-binding vibesdk-control-plane \
   --role=roles/run.invoker
 ```
 
-### 4.2 Grant Storage Permissions
+### 5.2 Grant Storage Permissions
 ```bash
 # Grant storage access to the service account
 gcloud projects add-iam-policy-binding qfxcloud-app-builder \
@@ -148,12 +292,14 @@ gcloud projects add-iam-policy-binding qfxcloud-app-builder \
   --role="roles/storage.objectViewer"
 
 # Grant access to the frontend bucket specifically
-gsutil iam ch serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com:objectViewer gs://vibesdk-frontend
+gcloud storage buckets add-iam-policy-binding gs://vibesdk-frontend \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/storage.objectAdmin"
 ```
 
-## Step 5: Verify Deployment
+## Step 6: Verify Deployment
 
-### 5.1 Test Service Endpoints
+### 6.1 Test Service Endpoints
 ```bash
 # Test root path (should return HTML)
 curl https://vibesdk-control-plane-2886014379.us-central1.run.app/
@@ -165,7 +311,7 @@ curl https://vibesdk-control-plane-2886014379.us-central1.run.app/api/health
 curl https://vibesdk-control-plane-2886014379.us-central1.run.app/debug-env
 ```
 
-### 5.2 Check Service Logs
+### 6.2 Check Service Logs
 ```bash
 # View recent logs
 gcloud logging read 'resource.type=cloud_run_revision AND resource.labels.service_name=vibesdk-control-plane' \
@@ -173,24 +319,31 @@ gcloud logging read 'resource.type=cloud_run_revision AND resource.labels.servic
   --format='value(textPayload)'
 ```
 
-### 5.3 Verify Environment Variables
+### 6.3 Verify Environment Variables
 The debug endpoint should return:
 ```json
 {
   "runtimeProvider": "gcp",
   "gcsFrontendBucket": "vibesdk-frontend",
   "gcsTemplatesBucket": "vibesdk-templates",
+  "firestoreProjectId": "qfxcloud-app-builder",
+  "firestoreCollection": "vibesdk-kv",
   "customDomain": "vibesdk-control-plane-2886014379.us-central1.run.app",
   "hostname": "vibesdk-control-plane-2886014379.us-central1.run.app",
   "pathname": "/debug-env",
+  "databaseUrl": "SET",
   "allEnvVars": [
     "GCS_TEMPLATES_BUCKET",
-    "GCS_FRONTEND_BUCKET"
+    "GCS_FRONTEND_BUCKET",
+    "GCS_KV_BUCKET",
+    "FIRESTORE_PROJECT_ID",
+    "FIRESTORE_COLLECTION",
+    "DATABASE_URL"
   ]
 }
 ```
 
-## Step 6: Update Service URL (if needed)
+## Step 7: Update Service URL (if needed)
 
 If the service URL changes, update it in `infra/gcp/terraform.tfvars`:
 
@@ -220,7 +373,8 @@ terraform apply -auto-approve
 | `FIRESTORE_COLLECTION` | Firestore collection name | `"vibesdk-kv"` |
 | `GCS_TEMPLATES_BUCKET` | Templates storage bucket | `"vibesdk-templates"` |
 | `GCS_FRONTEND_BUCKET` | Frontend assets bucket | `"vibesdk-frontend"` |
-| `GCS_ASSETS_PREFIX` | Assets path prefix | `"frontend-assets"` |
+| `GCS_KV_BUCKET` | KV store bucket | `"vibesdk-frontend"` |
+| `DATABASE_URL` | PostgreSQL connection string | `"postgresql://user:pass@host:port/db"` |
 | `GCP_ACCESS_TOKEN` | Google Cloud access token | `"ya29.a0ATi6K..."` |
 | `CUSTOM_DOMAIN` | Service domain | `"vibesdk-control-plane-2886014379.us-central1.run.app"` |
 
@@ -241,15 +395,30 @@ When adding a new environment variable:
 2. **401 Invalid Credentials**: Update `GCP_ACCESS_TOKEN` with a fresh token
 3. **Environment variable not available**: Check all 4 configuration files
 4. **Service not accessible**: Verify ingress is set to `INGRESS_TRAFFIC_ALL`
+5. **Platform configuration not found**: Ensure `platform_configs.json` is uploaded to `gs://vibesdk-frontend/kv/platform_configs`
+6. **Rate limit service failing**: Verify platform configuration is properly loaded from KV store
 
 ### Getting Fresh Access Token
 ```bash
+# Generate a fresh access token (valid for 1 hour)
 gcloud auth print-access-token
+
+# For longer-lived tokens, use application default credentials
+gcloud auth application-default login
 ```
 
 ### Checking Service Status
 ```bash
 gcloud run services describe vibesdk-control-plane --region=us-central1
+```
+
+### Verifying Platform Configuration
+```bash
+# Check if platform configuration exists
+gcloud storage ls gs://vibesdk-frontend/kv/
+
+# View the platform configuration
+gcloud storage cat gs://vibesdk-frontend/kv/platform_configs
 ```
 
 ## Migration Rules Reference
@@ -271,9 +440,96 @@ The deployment is successful when:
 - ✅ API endpoints return JSON responses (200 OK)
 - ✅ CORS headers are properly set
 - ✅ Environment variables are correctly configured
-- ✅ KV store uses Google Cloud Firestore
+- ✅ KV store uses Google Cloud Storage (GCS)
 - ✅ CSRF validation is disabled for GCP environment
 - ✅ Static assets are served from GCS bucket
+- ✅ Platform configuration is loaded from KV store
+- ✅ Rate limit service is working properly
+- ✅ Database connection is established
+
+## Greenfield Deployment Commands
+
+For a complete greenfield deployment, run these commands in sequence:
+
+```bash
+# 1. Set up authentication
+gcloud auth login
+gcloud config set project qfxcloud-app-builder
+
+# 2. Enable required APIs
+gcloud services enable cloudbuild.googleapis.com run.googleapis.com storage.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com sqladmin.googleapis.com pubsub.googleapis.com
+
+# 3. Create service account and grant roles
+gcloud iam service-accounts create vibesdk-runtime --display-name="VibeSDK Runtime Service Account"
+gcloud projects add-iam-policy-binding qfxcloud-app-builder --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" --role="roles/run.invoker"
+gcloud projects add-iam-policy-binding qfxcloud-app-builder --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+gcloud projects add-iam-policy-binding qfxcloud-app-builder --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" --role="roles/storage.objectAdmin"
+gcloud projects add-iam-policy-binding qfxcloud-app-builder --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" --role="roles/iam.serviceAccountTokenCreator"
+gcloud projects add-iam-policy-binding qfxcloud-app-builder --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" --role="roles/cloudsql.client"
+gcloud projects add-iam-policy-binding qfxcloud-app-builder --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" --role="roles/pubsub.publisher"
+
+# 4. Get access token
+export GCP_ACCESS_TOKEN=$(gcloud auth print-access-token)
+
+# 5. Build and push Docker image
+cd /home/arunr/projects/vibesdk
+docker build -f container/Dockerfile.workerd -t us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest .
+docker push us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest
+
+# 6. Create platform configuration
+cat > platform_configs.json << 'EOF'
+{
+  "security": {
+    "rateLimit": {
+      "apiRateLimit": {
+        "enabled": true,
+        "store": "RATE_LIMITER",
+        "bindingName": "API_RATE_LIMITER"
+      },
+      "authRateLimit": {
+        "enabled": true,
+        "store": "RATE_LIMITER",
+        "bindingName": "AUTH_RATE_LIMITER"
+      },
+      "appCreation": {
+        "enabled": true,
+        "store": "DURABLE_OBJECT",
+        "limit": 10,
+        "dailyLimit": 50,
+        "period": 3600
+      },
+      "llmCalls": {
+        "enabled": true,
+        "store": "DURABLE_OBJECT",
+        "limit": 100,
+        "period": 3600,
+        "dailyLimit": 400,
+        "excludeBYOKUsers": true
+      }
+    }
+  },
+  "globalMessaging": {
+    "globalUserMessage": "",
+    "changeLogs": ""
+  }
+}
+EOF
+
+# 7. Deploy infrastructure
+cd infra/gcp
+terraform init
+terraform apply -auto-approve
+
+# 8. Upload platform configuration
+gcloud storage cp ../../platform_configs.json gs://vibesdk-frontend/kv/platform_configs
+
+# 9. Configure service permissions
+gcloud run services add-iam-policy-binding vibesdk-control-plane --region=us-central1 --member=allUsers --role=roles/run.invoker
+gcloud storage buckets add-iam-policy-binding gs://vibesdk-frontend --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" --role="roles/storage.objectAdmin"
+
+# 10. Verify deployment
+curl https://vibesdk-control-plane-2886014379.us-central1.run.app/debug-env
+```
 
 ## Next Steps
 
