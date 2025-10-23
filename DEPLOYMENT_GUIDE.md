@@ -1,0 +1,285 @@
+# VibeSDK Google Cloud Deployment Guide
+
+This guide provides step-by-step instructions for deploying the VibeSDK application to Google Cloud Platform (GCP) using Terraform, following the migration rules outlined in `migration-gcp-plan/rules.md`.
+
+## Prerequisites
+
+- Google Cloud SDK (`gcloud`) installed and authenticated
+- Terraform installed
+- Docker installed
+- Access to the `qfxcloud-app-builder` GCP project
+- WSL/Linux environment (for Windows users)
+
+## Overview
+
+The deployment process involves:
+1. Building and pushing Docker images to Google Artifact Registry
+2. Configuring environment variables across multiple files
+3. Deploying infrastructure using Terraform
+4. Verifying the deployment
+
+## Step 1: Build and Push Docker Image
+
+### 1.1 Build the Docker Image
+```bash
+# Navigate to project root
+cd /home/arunr/projects/vibesdk
+
+# Build the workerd runtime image
+docker build -f container/Dockerfile.workerd -t us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest .
+```
+
+### 1.2 Push to Artifact Registry
+```bash
+# Push the image to Google Artifact Registry
+docker push us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest
+```
+
+## Step 2: Environment Variable Configuration
+
+Environment variables must be configured in **4 different files** for proper deployment:
+
+### 2.1 Terraform Configuration (`infra/gcp/terraform.tfvars`)
+
+This is the **primary source** of environment variables. Add or update variables in the `runtime_env` section:
+
+```terraform
+runtime_env = {
+  # Core runtime configuration
+  RUNTIME_PROVIDER          = "gcp"
+  GCP_PROJECT_ID            = "qfxcloud-app-builder"
+  GCP_REGION                = "us-central1"
+  
+  # Database configuration
+  FIRESTORE_PROJECT_ID      = "qfxcloud-app-builder"
+  FIRESTORE_COLLECTION      = "vibesdk-kv"
+  
+  # Storage configuration
+  GCS_TEMPLATES_BUCKET      = "vibesdk-templates"
+  GCS_FRONTEND_BUCKET       = "vibesdk-frontend"
+  GCS_ASSETS_PREFIX         = "frontend-assets"
+  
+  # Authentication
+  GCP_ACCESS_TOKEN          = "your-access-token-here"
+  
+  # Domain configuration
+  CUSTOM_DOMAIN             = "vibesdk-control-plane-2886014379.us-central1.run.app"
+  CUSTOM_PREVIEW_DOMAIN     = "vibesdk-control-plane-2886014379.us-central1.run.app"
+  
+  # Other required variables...
+}
+```
+
+### 2.2 Worker Configuration Types (`worker-configuration.d.ts`)
+
+Add the environment variable to the TypeScript interface definitions:
+
+```typescript
+interface Env {
+  // ... existing properties
+  GCS_FRONTEND_BUCKET: string;
+  // ... other properties
+}
+
+interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, 
+  "TEMPLATES_REPOSITORY" | 
+  "ALLOWED_EMAIL" | 
+  // ... other properties
+  "GCS_FRONTEND_BUCKET" | 
+  // ... other properties
+>> {}
+```
+
+### 2.3 Workerd Runtime Configuration (`container/workerd/service.capnp`)
+
+Add the environment variable binding to expose it to the worker runtime:
+
+```capnp
+bindings = [
+  // ... existing bindings
+  (name = "GCS_TEMPLATES_BUCKET", fromEnvironment = "GCS_TEMPLATES_BUCKET"),
+  (name = "GCS_FRONTEND_BUCKET", fromEnvironment = "GCS_FRONTEND_BUCKET"),
+  (name = "FIRESTORE_PROJECT_ID", fromEnvironment = "FIRESTORE_PROJECT_ID"),
+  // ... other bindings
+]
+```
+
+### 2.4 Worker Code Implementation
+
+Use the environment variable in your worker code:
+
+```typescript
+// In worker/index.ts or other worker files
+const frontendBucket = env.GCS_FRONTEND_BUCKET;
+```
+
+## Step 3: Deploy Infrastructure with Terraform
+
+### 3.1 Initialize Terraform
+```bash
+cd infra/gcp
+terraform init
+```
+
+### 3.2 Apply Terraform Configuration
+```bash
+# Deploy the infrastructure
+terraform apply -auto-approve
+```
+
+**Note**: This command may show errors about destroying services with dependencies. These can be ignored as they don't affect the Cloud Run service deployment.
+
+## Step 4: Configure Service Permissions
+
+### 4.1 Allow Unauthenticated Access
+```bash
+# Allow public access to the Cloud Run service
+gcloud run services add-iam-policy-binding vibesdk-control-plane \
+  --region=us-central1 \
+  --member=allUsers \
+  --role=roles/run.invoker
+```
+
+### 4.2 Grant Storage Permissions
+```bash
+# Grant storage access to the service account
+gcloud projects add-iam-policy-binding qfxcloud-app-builder \
+  --member="serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com" \
+  --role="roles/storage.objectViewer"
+
+# Grant access to the frontend bucket specifically
+gsutil iam ch serviceAccount:vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com:objectViewer gs://vibesdk-frontend
+```
+
+## Step 5: Verify Deployment
+
+### 5.1 Test Service Endpoints
+```bash
+# Test root path (should return HTML)
+curl https://vibesdk-control-plane-2886014379.us-central1.run.app/
+
+# Test API health endpoint
+curl https://vibesdk-control-plane-2886014379.us-central1.run.app/api/health
+
+# Test debug endpoint
+curl https://vibesdk-control-plane-2886014379.us-central1.run.app/debug-env
+```
+
+### 5.2 Check Service Logs
+```bash
+# View recent logs
+gcloud logging read 'resource.type=cloud_run_revision AND resource.labels.service_name=vibesdk-control-plane' \
+  --limit=20 \
+  --format='value(textPayload)'
+```
+
+### 5.3 Verify Environment Variables
+The debug endpoint should return:
+```json
+{
+  "runtimeProvider": "gcp",
+  "gcsFrontendBucket": "vibesdk-frontend",
+  "gcsTemplatesBucket": "vibesdk-templates",
+  "customDomain": "vibesdk-control-plane-2886014379.us-central1.run.app",
+  "hostname": "vibesdk-control-plane-2886014379.us-central1.run.app",
+  "pathname": "/debug-env",
+  "allEnvVars": [
+    "GCS_TEMPLATES_BUCKET",
+    "GCS_FRONTEND_BUCKET"
+  ]
+}
+```
+
+## Step 6: Update Service URL (if needed)
+
+If the service URL changes, update it in `infra/gcp/terraform.tfvars`:
+
+```terraform
+runtime_env = {
+  # ... other variables
+  CUSTOM_DOMAIN = "new-service-url.us-central1.run.app"
+  # ... other variables
+}
+```
+
+Then reapply Terraform:
+```bash
+terraform apply -auto-approve
+```
+
+## Environment Variable Reference
+
+### Required Environment Variables
+
+| Variable | Purpose | Example Value |
+|----------|---------|---------------|
+| `RUNTIME_PROVIDER` | Runtime environment identifier | `"gcp"` |
+| `GCP_PROJECT_ID` | Google Cloud project ID | `"qfxcloud-app-builder"` |
+| `GCP_REGION` | Google Cloud region | `"us-central1"` |
+| `FIRESTORE_PROJECT_ID` | Firestore project ID | `"qfxcloud-app-builder"` |
+| `FIRESTORE_COLLECTION` | Firestore collection name | `"vibesdk-kv"` |
+| `GCS_TEMPLATES_BUCKET` | Templates storage bucket | `"vibesdk-templates"` |
+| `GCS_FRONTEND_BUCKET` | Frontend assets bucket | `"vibesdk-frontend"` |
+| `GCS_ASSETS_PREFIX` | Assets path prefix | `"frontend-assets"` |
+| `GCP_ACCESS_TOKEN` | Google Cloud access token | `"ya29.a0ATi6K..."` |
+| `CUSTOM_DOMAIN` | Service domain | `"vibesdk-control-plane-2886014379.us-central1.run.app"` |
+
+### Adding New Environment Variables
+
+When adding a new environment variable:
+
+1. **Add to `terraform.tfvars`** (primary source)
+2. **Add to `worker-configuration.d.ts`** (TypeScript types)
+3. **Add to `service.capnp`** (workerd bindings)
+4. **Use in worker code** (implementation)
+
+## Troubleshooting
+
+### Common Issues
+
+1. **403 Forbidden**: Re-run the IAM policy binding command
+2. **401 Invalid Credentials**: Update `GCP_ACCESS_TOKEN` with a fresh token
+3. **Environment variable not available**: Check all 4 configuration files
+4. **Service not accessible**: Verify ingress is set to `INGRESS_TRAFFIC_ALL`
+
+### Getting Fresh Access Token
+```bash
+gcloud auth print-access-token
+```
+
+### Checking Service Status
+```bash
+gcloud run services describe vibesdk-control-plane --region=us-central1
+```
+
+## Migration Rules Reference
+
+This deployment follows the migration rules from `migration-gcp-plan/rules.md`:
+
+- **Step 1**: GCP Landing Zone (✅ Complete)
+- **Step 2**: Runtime Platform (✅ Complete) 
+- **Step 3**: Data Layer (✅ Complete)
+- **Step 4**: Durable Objects and Sandbox (Pending)
+- **Step 5**: App Deployment Multi-cloud (✅ Complete)
+- **Step 6**: Local Dev and Testing (Pending)
+- **Step 7**: Custom Agent Runtime (Pending)
+
+## Success Criteria
+
+The deployment is successful when:
+- ✅ Root path returns HTML content (200 OK)
+- ✅ API endpoints return JSON responses (200 OK)
+- ✅ CORS headers are properly set
+- ✅ Environment variables are correctly configured
+- ✅ KV store uses Google Cloud Firestore
+- ✅ CSRF validation is disabled for GCP environment
+- ✅ Static assets are served from GCS bucket
+
+## Next Steps
+
+After successful deployment:
+1. Configure DNS and TLS (if using custom domain)
+2. Set up monitoring and alerting
+3. Implement CI/CD pipeline
+4. Configure local development environment
+5. Plan migration of remaining Cloudflare-specific features
