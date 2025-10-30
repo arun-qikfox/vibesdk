@@ -1,0 +1,26 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: Build workerd image
+    args:
+      [
+        "build",
+        "-f",
+        "container/Dockerfile.workerd",
+        "-t",
+        "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:api-auth-rate-limit-fix",
+        ".",
+      ]
+
+  - name: gcr.io/cloud-builders/docker
+    id: Push workerd image
+    args:
+      [
+        "push",
+        "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:api-auth-rate-limit-fix",
+      ]
+
+images:
+  - "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:api-auth-rate-limit-fix"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

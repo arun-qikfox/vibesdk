@@ -69,6 +69,7 @@ All infrastructure is managed by `infra/gcp`:
 
 * Replace the remaining Cloudflare-specific imports in shared modules with GCP-friendly adapters so the job no longer needs stubs.
 * Multi-cloud deployment uses a target registry (`cloudflare-workers`, `gcp-cloud-run`) backed by `shared/platform/deployment`. Cloudflare deploys are routed through the new interface; the registry now defaults to the GCP stub until the Cloud Run build pipeline lands.
+* Cloud Run metadata is persisted in the new `app_deployments` table via `DeploymentService`, and the Worker proxies GCP preview traffic directly to the recorded service URL with helpful status messaging.
 * Add Cloud Scheduler/Eventarc trigger so the job runs automatically when Pub/Sub messages arrive.
 * Implement real sandbox orchestration (instead of the stub that marks runs as succeeded).
 * Harden authentication/authorization between control plane and job (use dedicated service accounts and principle-of-least-privilege IAM bindings).

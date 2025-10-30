@@ -37,3 +37,22 @@ resource "google_storage_bucket_iam_member" "runtime_access" {
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${each.value}"
 }
+
+resource "google_storage_bucket" "deployment_contexts" {
+  count                       = var.context_bucket_name != "" ? 1 : 0
+  name                        = var.context_bucket_name
+  project                     = var.project_id
+  location                    = var.context_bucket_location != "" ? var.context_bucket_location : var.location
+  uniform_bucket_level_access = true
+  force_destroy               = var.context_bucket_force_destroy
+  labels                      = var.context_bucket_labels
+
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      age = var.context_bucket_lifecycle_age_days
+    }
+  }
+}

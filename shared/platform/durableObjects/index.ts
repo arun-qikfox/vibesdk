@@ -13,3 +13,4 @@ registerAgentStore('cloudflare', (env) => {
 registerAgentStore('gcp', (env) => createGcpAgentStore(env));
 
 export { createAgentStore };
+export type { AgentStore } from './agentStore';

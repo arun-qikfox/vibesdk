@@ -39,6 +39,13 @@ bindings = [
 const myValue = env.YOUR_NEW_VARIABLE;
 ```
 
+## Vite Frontend Build Variables
+
+| Variable | Purpose | Notes |
+|----------|---------|-------|
+| `VITE_API_BASE_URL` | Explicit API origin for the SPA. | Optional. When unset, the frontend falls back to `window.location.origin`. Set when the UI is hosted on a different domain than the API service (e.g., custom preview domains). |
+| `API_BASE_URL` | Runtime Cloud Run env used by the entrypoint to generate `__app_config__.js`. | Defaults to the control-plane Cloud Run host (`https://vibesdk-control-plane-<...>.run.app`). Override when serving the UI from a different API host. |
+
 ## Common Environment Variables
 
 | Variable | Purpose | Required Files |

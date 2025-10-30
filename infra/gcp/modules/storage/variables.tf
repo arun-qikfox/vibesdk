@@ -49,3 +49,33 @@ variable "runtime_service_accounts" {
   type        = map(string)
   default     = {}
 }
+
+variable "context_bucket_name" {
+  description = "Optional deployment context bucket name. Leave blank to skip creation."
+  type        = string
+  default     = ""
+}
+
+variable "context_bucket_location" {
+  description = "Override location for the deployment context bucket (defaults to primary location)."
+  type        = string
+  default     = ""
+}
+
+variable "context_bucket_force_destroy" {
+  description = "Whether to force destroy the deployment context bucket."
+  type        = bool
+  default     = false
+}
+
+variable "context_bucket_labels" {
+  description = "Labels applied to the deployment context bucket."
+  type        = map(string)
+  default     = { purpose = "deployment-contexts" }
+}
+
+variable "context_bucket_lifecycle_age_days" {
+  description = "Age in days after which deployment context objects are deleted."
+  type        = number
+  default     = 30
+}

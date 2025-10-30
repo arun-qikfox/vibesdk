@@ -20,6 +20,8 @@ substitutions:
   _SERVICE_NAME: vibesdk-generated-app
   _CONTEXT_TAR: cloudrun-context.tar.gz
   _REPOSITORY: vibesdk-apps
+  _TAG: latest
+  _API_BASE_URL: ""
 
 steps:
   # Unpack the pre-built Docker context (app source + template Dockerfile).
@@ -44,14 +46,14 @@ steps:
       - '--file'
       - context/Dockerfile
       - '--tag'
-      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${_TAG}'
       - context
 
   # Push image to Artifact Registry.
   - name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${_TAG}'
 
   # Deploy to Cloud Run.
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -61,10 +63,12 @@ steps:
       - deploy
       - ${_SERVICE_NAME}
       - '--region=${_REGION}'
-      - '--image=${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '--image=${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${_TAG}'
+      - '--set-env-vars=API_BASE_URL=${_API_BASE_URL}'
+      - "--service-account=vibesdk-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
       - '--platform=managed'
       - '--allow-unauthenticated'
       - '--port=8080'
 
 images:
-  - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${SHORT_SHA}'
+  - '${_LOCATION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE_NAME}:${_TAG}'

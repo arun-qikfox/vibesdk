@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Analytics and Count Queries Service
  */

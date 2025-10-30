@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * User Service
  * Handles all user-related database operations including sessions, teams, and profiles

@@ -5,8 +5,6 @@ import { getCORSConfig, getSecureHeadersConfig } from './config/security';
 import { RateLimitService } from './services/rate-limit/rateLimits';
 import { AppEnv } from './types/appenv';
 import { setupRoutes } from './api/routes';
-import { CsrfService } from './services/csrf/CsrfService';
-import { SecurityError, SecurityErrorType } from 'shared/types/errors';
 import { getGlobalConfigurableSettings } from './config';
 import { AuthConfig, setAuthLevel } from './middleware/auth/routeAuth';
 import { getRuntimeProvider } from 'shared/platform/runtimeProvider';
@@ -86,7 +84,7 @@ export function createApp(env: Env): Hono<AppEnv> {
         c.set('config', config);
 
         // Apply global rate limit middleware. Should this be moved after setupRoutes so that maybe 'user' is available?
-        await RateLimitService.enforceGlobalApiRateLimit(env, c.get('config').security.rateLimit, null, c.req.raw)
+        await RateLimitService.enforceGlobalApiRateLimit(env, c.get('config').security.rateLimit, null, c.req.raw);
         await next();
     })
 

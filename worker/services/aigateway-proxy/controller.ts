@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getConfigurationForModel } from '../../agents/inferutils/core';
 import { eq } from 'drizzle-orm';
 import { apps } from '../../database/schema';

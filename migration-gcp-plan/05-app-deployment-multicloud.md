@@ -51,18 +51,30 @@ Implementation notes (Step 2):
 - `entrypoint.sh` serves static builds with `serve@14` when no explicit server is defined, covering purely static apps without extra configuration.
 
 ### Step 3: Metadata and Routing
-- [ ] Create Cloud SQL table `app_deployments` with columns (`app_id`, `version`, `target`, `service_url`, `status`, `created_at`).
-- [ ] When deploying to Cloud Run, store resulting service URL.
-- [ ] Update `handleUserAppRequest` in `worker/index.ts:52-119` to:
+- [x] Create Cloud SQL table `app_deployments` with columns (`app_id`, `version`, `target`, `service_url`, `status`, `created_at`).
+- [x] When deploying to Cloud Run, store resulting service URL.
+- [x] Update `handleUserAppRequest` in `worker/index.ts:52-119` to:
   - Check if request host matches the configured preview domain.
   - Resolve to Cloud Run URL via database lookup when target is `gcp-cloud-run`.
   - Preserve dispatcher path for `cloudflare-workers`.
 
+Implementation notes (Step 3):
+- Added `app_deployments` table (Drizzle schema + migrations for both D1 and Postgres) to track deployment target, version, status, metadata and service URL.
+- Introduced `DeploymentService` to upsert per-target deployment records and retrieve the latest revision.
+- `AppService` exposes `getAppByDeploymentId` so Worker routing can map subdomains back to app records.
+- GCP runtime requests now proxy through `proxyCloudRunAppRequest`, which validates deployment state and forwards traffic to the Cloud Run service URL, returning helpful status codes while deployments are pending or failed.
+
 ### Step 4: DNS and TLS
-- [ ] Reserve domain (e.g., `apps.vibesdk.example.com`) in Cloud DNS.
-- [ ] Configure HTTPS Load Balancer with Cloud Run backend to route `*.apps.vibesdk.example.com`.
-- [ ] For preview apps, mint subdomain records dynamically using Cloud DNS API (or rely on Cloud Run domain mappings).
-- [ ] Document DNS automation in Terraform.
+- [x] Reserve domain (e.g., `apps.vibesdk.example.com`) in Cloud DNS.
+- [x] Configure HTTPS Load Balancer with Cloud Run backend to route `*.apps.vibesdk.example.com`.
+- [x] For preview apps, mint subdomain records dynamically using Cloud DNS API (or rely on Cloud Run domain mappings).
+- [x] Document DNS automation in Terraform.
+
+Implementation notes (Step 4):
+- Added `modules/preview_ingress` Terraform module that provisions a public Cloud DNS zone, wildcard records, managed certificate, serverless NEG, and HTTPS load balancer backed by the control-plane Cloud Run service.
+- Reserved a global IPv4 address so `ai.qikfox.com` and `*.ai.qikfox.com` resolve without manual records; delegation requires only updating NS entries at the registrar.
+- Managed certificate lifecycle is automatic; terraform outputs expose the `preview_ingress` block (domain, IP, name servers) for operational visibility.
+- Preview routing continues to rely on wildcard DNS rather than per-app records, so deployments immediately resolve once the control plane returns a Cloud Run service URL.
 
 ### Step 5: UI and Configuration Defaults
 - [x] Update backend default so `DEFAULT_DEPLOYMENT_TARGET` falls back to `gcp-cloud-run` when unspecified (frontend toggle pending).

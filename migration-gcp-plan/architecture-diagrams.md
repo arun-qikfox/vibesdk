@@ -31,7 +31,7 @@ Supporting services (not shown to scale):
 - Artifact Registry: `us-central1-docker.pkg.dev/.../vibesdk/*`
 - Secret Manager: runtime secrets for Cloud Run service and sandbox job
 - VPC Connector & Cloud SQL: control plane persistence
-- Deployment target registry resolves `cloudflare-workers` (active) and `gcp-cloud-run` (stub) adapters for downstream deployment orchestration, defaulting to `gcp-cloud-run` when unset.
+- Deployment target registry resolves `cloudflare-workers` (active) and `gcp-cloud-run` adapters for downstream deployment orchestration, defaulting to `gcp-cloud-run` when unset. Cloud Run proxy uses `app_deployments` metadata to forward preview traffic.
 ```
 
 ## Durable Object Compatibility Layer

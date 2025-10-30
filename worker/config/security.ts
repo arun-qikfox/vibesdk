@@ -3,9 +3,10 @@
  * Provides comprehensive security settings for Hono middleware
  */
 
-import { DEFAULT_RATE_LIMIT_SETTINGS, RateLimitSettings } from "../services/rate-limit/config";
+import { DEFAULT_RATE_LIMIT_SETTINGS, RateLimitSettings, RateLimitStore } from "../services/rate-limit/config";
 import { Context } from "hono";
 import { isDev } from "../utils/envs";
+import { isGcpRuntime } from "shared/platform/runtimeProvider";
 
 // Type definitions for security configurations
 export interface CORSConfig {
@@ -77,9 +78,35 @@ export function isOriginAllowed(env: Env, origin: string): boolean {
  * Get rate limit settings based on environment
  */
 export function getRateLimitSettings(env: Env): RateLimitSettings {
-    // For GCP environment, use default settings
+    // For GCP environment, disable rate limiting temporarily to avoid database issues
     if (isGcpRuntime(env)) {
-        return DEFAULT_RATE_LIMIT_SETTINGS;
+        return {
+            apiRateLimit: {
+                enabled: false,
+                store: RateLimitStore.RATE_LIMITER,
+                bindingName: 'API_RATE_LIMITER',
+            },
+            authRateLimit: {
+                enabled: false,
+                store: RateLimitStore.RATE_LIMITER,
+                bindingName: 'AUTH_RATE_LIMITER',
+            },
+            appCreation: {
+                enabled: false,
+                store: RateLimitStore.DURABLE_OBJECT,
+                limit: 10,
+                dailyLimit: 50,
+                period: 3600, // 1 hour
+            },
+            llmCalls: {
+                enabled: false,
+                store: RateLimitStore.DURABLE_OBJECT,
+                limit: 100,
+                period: 60 * 60, // 1 hour
+                dailyLimit: 400,
+                excludeBYOKUsers: true,
+            },
+        };
     }
     
     return DEFAULT_RATE_LIMIT_SETTINGS;

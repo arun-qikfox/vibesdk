@@ -43,8 +43,8 @@ export abstract class BaseService {
     /**
      * Get database connection for direct queries when needed
      */
-    protected get database() {
-        return this.db.db;
+    protected get database(): any {
+        return this.db.db as any;
     }
 
     /**
@@ -53,7 +53,7 @@ export abstract class BaseService {
      * 
      * @param strategy - 'fast' for lowest latency, 'fresh' for latest data
      */
-    protected getReadDb(strategy: 'fast' | 'fresh' = 'fast') {
-        return this.db.getReadDb(strategy);
+    protected getReadDb(strategy: 'fast' | 'fresh' = 'fast'): any {
+        return this.db.getReadDb(strategy) as any;
     }
 }

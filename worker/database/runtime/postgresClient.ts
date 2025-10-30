@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres, { type Options, type Sql } from 'postgres';
+import postgres from 'postgres';
 import * as schema from '../schema.gcp';
 import type { DatabaseClient, DatabaseInstance } from '../clients/types';
 import type { DatabaseRuntimeEnv } from './types';
@@ -8,20 +8,22 @@ const DEFAULT_POOL_MAX = 8;
 const DEFAULT_IDLE_TIMEOUT_SECONDS = 30;
 const DEFAULT_CONNECT_TIMEOUT_SECONDS = 10;
 
+type SqlClient = ReturnType<typeof postgres>;
+
 interface NormalizedConnectionConfig {
-    sql: Sql<unknown>;
+    sql: SqlClient;
 }
 
 export class PostgresDatabaseClient implements DatabaseClient {
     public readonly kind = 'postgres' as const;
 
-    private readonly sql: Sql<unknown>;
+    private readonly sql: SqlClient;
     private readonly primary: DatabaseInstance;
 
     constructor(private readonly env: DatabaseRuntimeEnv) {
         const { sql } = resolveConnection(this.env);
         this.sql = sql;
-        this.primary = drizzle(sql, { schema }) as DatabaseInstance;
+        this.primary = drizzle(sql, { schema }) as unknown as DatabaseInstance;
     }
 
     getPrimary(): DatabaseInstance {
@@ -36,6 +38,7 @@ export class PostgresDatabaseClient implements DatabaseClient {
         await this.sql.end();
     }
 }
+
 function resolveConnection(env: DatabaseRuntimeEnv): NormalizedConnectionConfig {
     const databaseUrl = readConfig(env, 'DATABASE_URL');
     if (!databaseUrl) {
@@ -50,7 +53,7 @@ function resolveConnection(env: DatabaseRuntimeEnv): NormalizedConnectionConfig 
     );
     const sslMode = readConfig(env, 'DATABASE_SSL_MODE');
 
-    const baseOptions: Partial<Options<unknown>> = {
+    const baseOptions: Record<string, unknown> = {
         max: poolMax,
         idle_timeout: idleTimeout,
         connect_timeout: DEFAULT_CONNECT_TIMEOUT_SECONDS,
@@ -69,12 +72,13 @@ function resolveConnection(env: DatabaseRuntimeEnv): NormalizedConnectionConfig 
 
     return { sql };
 }
+
 function createCloudSqlClient(
     env: DatabaseRuntimeEnv,
     rawUrl: string,
-    baseOptions: Partial<Options<unknown>>,
+    baseOptions: Record<string, unknown>,
     sslMode?: string,
-): Sql<unknown> {
+): SqlClient {
     const normalized = rawUrl.replace('@//cloudsql/', '@placeholder/');
     const url = new URL(normalized);
     const [instanceConnectionName, ...databaseSegments] = url.pathname
@@ -97,13 +101,10 @@ function createCloudSqlClient(
         database,
         username,
         password,
-        max: baseOptions.max,
-        idle_timeout: baseOptions.idle_timeout,
-        connect_timeout: baseOptions.connect_timeout,
-        prepare: baseOptions.prepare,
         ssl: mapSslMode(sslMode ?? url.searchParams.get('sslmode') ?? undefined),
     });
 }
+
 function mapSslMode(mode?: string) {
     if (!mode) {
         return undefined;

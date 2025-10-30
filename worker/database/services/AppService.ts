@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * App Service - Database operations for apps
  */

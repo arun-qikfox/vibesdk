@@ -72,19 +72,32 @@ export class GcpStorageKVProvider implements KVProvider {
 			const objectKey = `kv/${key}`;
 			console.log('[GCS-KV] Object key:', objectKey);
 
-			const result = await objectStore.get(objectKey);
-			console.log('[GCS-KV] GCS get result:', { 
-				hasResult: !!result, 
-				resultType: typeof result 
-			});
+		const result = await objectStore.get(objectKey);
+		console.log('[GCS-KV] GCS get result:', { 
+			hasResult: !!result, 
+			resultType: typeof result 
+		});
 
-			if (!result) {
-				console.log('[GCS-KV] Object not found, returning null');
-				return null;
-			}
+		if (!result) {
+			console.log('[GCS-KV] Object not found, returning null');
+			return null;
+		}
 
-			// Parse the stored JSON
-			const entry: StorageEntry = JSON.parse(result);
+		// Get the text content from the ObjectStoreGetResult
+		const content = await result.text();
+		console.log('[GCS-KV] Content retrieved:', { 
+			contentLength: content.length,
+			contentPreview: content.substring(0, 100)
+		});
+
+		// Special handling for platform_configs - it's stored as plain JSON
+		if (key === 'platform_configs') {
+			console.log('[GCS-KV] Special handling for platform_configs - returning raw JSON');
+			return JSON.parse(content) as T;
+		}
+
+		// Parse the stored JSON as StorageEntry for other keys
+		const entry: StorageEntry = JSON.parse(content);
 			console.log('[GCS-KV] Parsed entry:', { 
 				hasValue: !!entry.value, 
 				hasExpiration: !!entry.expiration,

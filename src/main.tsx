@@ -13,9 +13,15 @@ initSentry();
 import type { RouterState } from 'react-router';
 
 declare global {
-  interface Window {
-    __staticRouterHydrationData?: Partial<Pick<RouterState, 'loaderData' | 'actionData' | 'errors'>>;
-  }
+	interface Window {
+		__staticRouterHydrationData?: Partial<Pick<RouterState, 'loaderData' | 'actionData' | 'errors'>>;
+		__APP_API_BASE_URL__?: string;
+	}
+}
+
+const envApiBaseUrl = import.meta.env?.VITE_API_BASE_URL?.trim();
+if (envApiBaseUrl) {
+	window.__APP_API_BASE_URL__ = envApiBaseUrl.replace(/\/+$/, '');
 }
 
 const router = createBrowserRouter(routes, {

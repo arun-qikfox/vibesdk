@@ -117,22 +117,21 @@ export async function getGlobalConfigurableSettings(env: Env): Promise<GlobalCon
         const kv = createKVProvider(env);
         console.log('[Config] KV provider created, fetching config with key:', CONFIG_KEY);
         
-        const storedConfigJson = await kv.get<string>(CONFIG_KEY);
+        const storedConfig = await kv.get<StoredConfig>(CONFIG_KEY);
         console.log('[Config] KV get result:', { 
-            hasResult: !!storedConfigJson, 
-            resultType: typeof storedConfigJson,
-            resultLength: storedConfigJson ? storedConfigJson.length : 0
+            hasResult: !!storedConfig, 
+            resultType: typeof storedConfig,
+            isObject: storedConfig && typeof storedConfig === 'object'
         });
         
-        if (!storedConfigJson) {
+        if (!storedConfig) {
             console.log('[Config] No stored config found, using defaults');
             // No stored config, use defaults
             return defaultConfig;
         }
         
-        console.log('[Config] Parsing stored configuration');
-        // Parse stored configuration
-        const storedConfig: StoredConfig = JSON.parse(storedConfigJson);
+        console.log('[Config] Using stored configuration directly');
+        // Stored configuration is already parsed by the KV provider
         
         console.log('[Config] Merging configurations');
         // Deep merge configurations (stored config overrides defaults)
@@ -165,15 +164,14 @@ export async function getUserConfigurableSettings(env: Env, userId: string): Pro
     try {
         // Try to fetch override config from KV
         const kv = createKVProvider(env);
-        const storedConfigJson = await kv.get<string>(`user_config:${userId}`);
+        const storedConfig = await kv.get<StoredConfig>(`user_config:${userId}`);
         
-        if (!storedConfigJson) {
+        if (!storedConfig) {
             // No stored config, use defaults
             return globalConfig;
         }
         
-        // Parse stored configuration
-        const storedConfig: StoredConfig = JSON.parse(storedConfigJson);
+        // Stored configuration is already parsed by the KV provider
         
         // Deep merge configurations (stored config overrides defaults)
         const mergedConfig = deepMerge<GlobalConfigurableSettings>(globalConfig, storedConfig);

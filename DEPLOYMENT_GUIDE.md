@@ -87,7 +87,24 @@ gcloud auth application-default login
 
 ## Step 1: Build and Push Docker Image
 
-### 1.1 Build the Docker Image
+### 1.1 Cloud Build pipeline for preview apps (reference: `cloudbuild/app-deploy.yaml`)
+```bash
+npm install
+npm run build                           # optional, ensures dist/ exists
+npm run cloudrun:context -- --src dist/app --out cloudrun-context.tar.gz
+gsutil cp cloudrun-context.tar.gz gs://vibesdk-build-artifacts/cloudrun-context.tar.gz
+gcloud builds submit \\
+  --config cloudbuild/app-deploy.yaml \\
+  --substitutions=_SERVICE_NAME=vibesdk-sandbox-preview,_LOCATION=us-central1,_REGION=us-central1,_CONTEXT_TAR=gs://vibesdk-build-artifacts/cloudrun-context.tar.gz \\
+  --project qfxcloud-app-builder
+gcloud run services describe vibesdk-sandbox-preview \\
+  --region us-central1 \\
+  --project qfxcloud-app-builder \\
+  --format='value(status.url)'
+curl https://<returned-url>/health
+```
+
+### 1.2 Build the Docker Image
 ```bash
 # Navigate to project root
 cd /home/arunr/projects/vibesdk
@@ -96,11 +113,18 @@ cd /home/arunr/projects/vibesdk
 docker build -f container/Dockerfile.workerd -t us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest .
 ```
 
-### 1.2 Push to Artifact Registry
+### 1.3 Push to Artifact Registry
 ```bash
 # Push the image to Google Artifact Registry
 docker push us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest
 ```
+### 1.4 Local smoke test
+```bash
+docker build -f templates/cloudrun-app/Dockerfile -t vibesdk-cloudrun-test .
+docker run -p 8080:8080 vibesdk-cloudrun-test
+curl http://localhost:8080/health
+```
+
 
 ## Step 2: Environment Variable Configuration
 
@@ -273,6 +297,30 @@ terraform apply -auto-approve
 
 **Note**: This command may show errors about destroying services with dependencies. These can be ignored as they don't affect the Cloud Run service deployment.
 
+### 4.3 Configure Preview DNS and TLS
+
+Terraform provisions an HTTPS load balancer, managed certificate, and Cloud DNS zone for preview applications. After the apply completes, fetch the output to see the details:
+
+```bash
+terraform output preview_ingress
+terraform output -json preview_ingress | jq
+```
+
+1. Delegate the subdomain (e.g., `ai.qikfox.com`) to Google Cloud DNS by configuring NS records at your registrar with the name servers returned in `preview_ingress.name_servers`.
+2. The module pre-creates `A` records for the apex and wildcard hostnames pointing at the reserved global IP. No additional per-app DNS entries are required.
+3. Wait for the managed certificate to reach the `ACTIVE` state:
+   ```bash
+   gcloud compute ssl-certificates describe ai-qikfox-preview-cert --global \
+     --format='value(managed.status)'
+   ```
+4. Once active, verify TLS by hitting the preview domain root:
+   ```bash
+   curl -I https://ai.qikfox.com
+   ```
+
+The preview host value is supplied to the control plane via `CUSTOM_PREVIEW_DOMAIN` in `infra/gcp/terraform.tfvars`, so generated apps automatically receive URLs such as `https://<deployment-id>.ai.qikfox.com`.
+If you want to test the Google-provided Cloud Run URLs first, set `enable_preview_ingress = false` and leave `CUSTOM_PREVIEW_DOMAIN` blank; you can re-enable both once you are ready to delegate DNS.
+
 ## Step 5: Configure Service Permissions
 
 ### 5.1 Allow Unauthenticated Access
@@ -309,6 +357,9 @@ curl https://vibesdk-control-plane-2886014379.us-central1.run.app/api/health
 
 # Test debug endpoint
 curl https://vibesdk-control-plane-2886014379.us-central1.run.app/debug-env
+
+# Test preview domain routing (expects 404 until an app deployment exists)
+curl -I https://ai.qikfox.com
 ```
 
 ### 6.2 Check Service Logs
@@ -374,9 +425,17 @@ terraform apply -auto-approve
 | `GCS_TEMPLATES_BUCKET` | Templates storage bucket | `"vibesdk-templates"` |
 | `GCS_FRONTEND_BUCKET` | Frontend assets bucket | `"vibesdk-frontend"` |
 | `GCS_KV_BUCKET` | KV store bucket | `"vibesdk-frontend"` |
+| `CUSTOM_DOMAIN` | Primary control-plane hostname | `"vibesdk-control-plane-2886014379.us-central1.run.app"` |
+| `CUSTOM_PREVIEW_DOMAIN` | Preview applications wildcard host | `"ai.qikfox.com"` |
 | `DATABASE_URL` | PostgreSQL connection string | `"postgresql://user:pass@host:port/db"` |
 | `GCP_ACCESS_TOKEN` | Google Cloud access token | `"ya29.a0ATi6K..."` |
-| `CUSTOM_DOMAIN` | Service domain | `"vibesdk-control-plane-2886014379.us-central1.run.app"` |
+
+### Frontend Build Variables
+
+| Variable | Purpose | Example Value |
+|----------|---------|---------------|
+| `VITE_API_BASE_URL` | (Optional) Overrides the SPA API origin when the UI is served from a different domain than the Cloud Run backend. | `"https://vibesdk-sandbox-preview-2pklfi2owa-uc.a.run.app"` |
+| `API_BASE_URL` | Runtime Cloud Run env for the generated app preview. Defaults to the control-plane URL so the SPA calls the correct API host. | `"https://vibesdk-control-plane-2886014379.us-central1.run.app"` |
 
 ### Adding New Environment Variables
 
@@ -475,6 +534,13 @@ export GCP_ACCESS_TOKEN=$(gcloud auth print-access-token)
 cd /home/arunr/projects/vibesdk
 docker build -f container/Dockerfile.workerd -t us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest .
 docker push us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest
+
+### Local smoke test (optional)
+```bash
+docker build -f templates/cloudrun-app/Dockerfile -t vibesdk-cloudrun-test .
+docker run -p 8080:8080 vibesdk-cloudrun-test
+curl http://localhost:8080/health
+```
 
 # 6. Create platform configuration
 cat > platform_configs.json << 'EOF'

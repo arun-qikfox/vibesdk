@@ -190,10 +190,12 @@ class GcpObjectStore implements ObjectStore {
 	constructor(private readonly env: EnvLike) {}
 
 	private get bucket(): string {
-		const value = readEnvValue(this.env, 'GCS_TEMPLATES_BUCKET');
+		const frontendBucket = readEnvValue(this.env, 'GCS_FRONTEND_BUCKET');
+		const templatesBucket = readEnvValue(this.env, 'GCS_TEMPLATES_BUCKET');
+		const value = frontendBucket && frontendBucket.trim().length > 0 ? frontendBucket : templatesBucket;
 		if (!value) {
 			throw new Error(
-				'GCS_TEMPLATES_BUCKET is not configured. Set this environment variable to the Google Cloud Storage bucket name.',
+				'Neither GCS_FRONTEND_BUCKET nor GCS_TEMPLATES_BUCKET is configured. Set one of these environment variables to the Google Cloud Storage bucket name.',
 			);
 		}
 		return value;

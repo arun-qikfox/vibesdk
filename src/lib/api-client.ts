@@ -65,6 +65,33 @@ import {
 } from '@/api-types';
 import { toast } from 'sonner';
 
+type GlobalWithOptionalConfig = typeof globalThis & {
+	__APP_API_BASE_URL__?: unknown;
+};
+
+const normalizeBaseUrl = (value: string): string =>
+	value.replace(/\/+$/, '');
+
+const resolveDefaultApiBaseUrl = (): string => {
+	const globalCandidate = (globalThis as GlobalWithOptionalConfig).__APP_API_BASE_URL__;
+	if (typeof globalCandidate === 'string' && globalCandidate.trim().length > 0) {
+		return normalizeBaseUrl(globalCandidate.trim());
+	}
+
+	const envCandidate = import.meta.env?.VITE_API_BASE_URL;
+	if (typeof envCandidate === 'string' && envCandidate.trim().length > 0) {
+		return normalizeBaseUrl(envCandidate.trim());
+	}
+
+	if (typeof window !== 'undefined' && window.location?.origin) {
+		return normalizeBaseUrl(window.location.origin);
+	}
+
+	return '';
+};
+
+const DEFAULT_API_BASE_URL = resolveDefaultApiBaseUrl();
+
 /**
  * Global auth modal trigger for 401 interception
  */
@@ -154,7 +181,12 @@ class ApiClient {
 	private csrfTokenInfo: CSRFTokenInfo | null = null;
 
 	constructor(config: ApiClientConfig = {}) {
-		this.baseUrl = config.baseUrl || '';
+		const providedBase =
+			typeof config.baseUrl === 'string' && config.baseUrl.trim().length > 0
+				? normalizeBaseUrl(config.baseUrl.trim())
+				: DEFAULT_API_BASE_URL;
+
+		this.baseUrl = providedBase;
 		this.defaultHeaders = {
 			'Content-Type': 'application/json',
 			...config.defaultHeaders,

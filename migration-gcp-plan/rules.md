@@ -14,7 +14,7 @@ Use this rule file to coordinate the Google Cloud migration. An LLM or human ope
 | Step | File | Summary | Status | Owner | Last Update | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | `migration-gcp-plan/01-gcp-landing-zone.md` | Create project, IAM, networking, Terraform skeleton, Artifact Registry, and secret placeholders. | done | Codex/user | 2025-10-18 | Project `qfxcloud-app-builder` provisioned via Terraform; state in `gs://qfxcloud-tf-state/landing-zone`; VPC, service accounts, Artifact Registry, and placeholder secrets verified. |
-| 2 | `migration-gcp-plan/02-runtime-platform.md` | Build Worker bundle, package with `workerd`, publish to Artifact Registry, and deploy Cloud Run control plane. | pending | - | - | - |
+| 2 | `migration-gcp-plan/02-runtime-platform.md` | Build Worker bundle, package with `workerd`, publish to Artifact Registry, and deploy Cloud Run control plane. | in-progress | Claude | 2025-01-27 | Rate limit configuration updated to disable apiRateLimit and authRateLimit only. Ready for Terraform deployment. |
 | 3 | `migration-gcp-plan/03-data-layer.md` | Map D1/KV/R2 to Cloud SQL, Firestore/Memorystore, Cloud Storage, and update adapters. | pending | - | - | - |
 | 4 | `migration-gcp-plan/04-durable-objects-and-sandbox.md` | Reproduce Durable Object state, rate limiting, and sandbox flows using Firestore, Redis, Cloud Run Jobs. | pending | - | - | - |
 | 5 | `migration-gcp-plan/05-app-deployment-multicloud.md` | Implement multi-target deployment with Cloud Run default, maintain Cloudflare path, and configure DNS/TLS. | pending | - | - | - |

@@ -6,7 +6,6 @@ import { getAgentStub, getTemplateForQuery } from '../../../agents';
 import { AgentConnectionData, AgentPreviewResponse, CodeGenArgs } from './types';
 import { ApiResponse, ControllerResponse } from '../types';
 import { RouteContext } from '../../types/route-context';
-import { ModelConfig } from '../../../agents/inferutils/config.types';
 import { RateLimitService } from '../../../services/rate-limit/rateLimits';
 import { getRateLimitSettings } from '../../../config/security';
 import { validateWebSocketOrigin } from '../../../middleware/security/websocket';
@@ -14,6 +13,7 @@ import { createLogger } from '../../../logger';
 import { getPreviewDomain } from 'worker/utils/urls';
 import { ImageType, uploadImage } from 'worker/utils/images';
 import { ProcessedImageAttachment } from 'worker/types/image-attachment';
+import type { AuthUser } from 'worker/types/auth-types';
 
 const defaultCodeGenArgs: CodeGenArgs = {
     query: '',
@@ -69,22 +69,20 @@ export class CodingAgentController extends BaseController {
             const writer = writable.getWriter();
             // Check if user is authenticated (required for app creation)
             // For testing, create a mock user if none exists
-            let user = context.user;
-            if (!user) {
-                user = {
-                    id: 'test-user-' + Date.now(),
-                    email: 'test@example.com',
-                    name: 'Test User',
-                    emailVerified: true,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                };
-                this.logger.info('Using mock user for testing', { userId: user.id });
+            const authUser: AuthUser = context.user ?? {
+                id: 'test-user-' + Date.now(),
+                email: 'test@example.com',
+                displayName: 'Test User',
+                emailVerified: true,
+                createdAt: new Date(),
+            };
+            if (!context.user) {
+                this.logger.info('Using mock user for testing', { userId: authUser.id });
             }
             try {
                 const rateLimitSettings = getRateLimitSettings(env);
                 if (rateLimitSettings.appCreation.enabled) {
-                    await RateLimitService.enforceAppCreationRateLimit(env, rateLimitSettings, user, request);
+                    await RateLimitService.enforceAppCreationRateLimit(env, rateLimitSettings, authUser, request);
                 }
             } catch (error) {
                 if (error instanceof Error) {
@@ -117,12 +115,12 @@ export class CodingAgentController extends BaseController {
             const inferenceContext = {
                 userModelConfigs: Object.fromEntries(userModelConfigs),
                 agentId: agentId,
-                userId: user.id,
+                userId: authUser.id,
                 enableRealtimeCodeFix: false, // This costs us too much, so disabled it for now
                 enableFastSmartCodeFix: false,
             }
-                                
-            this.logger.info(`Initialized inference context for user ${user.id}`, {
+
+            this.logger.info(`Initialized inference context for user ${authUser.id}`, {
                 modelConfigsCount: Object.keys(userModelConfigs).length,
             });
 
@@ -223,17 +221,15 @@ export class CodingAgentController extends BaseController {
             }
 
             // Extract user for rate limiting - create mock user if none exists
-            let user = context.user;
-            if (!user) {
-                user = {
-                    id: 'test-user-' + Date.now(),
-                    email: 'test@example.com',
-                    name: 'Test User',
-                    emailVerified: true,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                };
-                this.logger.info('Using mock user for WebSocket testing', { userId: user.id });
+            const webSocketUser: AuthUser = context.user ?? {
+                id: 'test-user-' + Date.now(),
+                email: 'test@example.com',
+                displayName: 'Test User',
+                emailVerified: true,
+                createdAt: new Date(),
+            };
+            if (!context.user) {
+                this.logger.info('Using mock user for WebSocket testing', { userId: webSocketUser.id });
             }
 
             this.logger.info(`WebSocket connection request for chat: ${chatId}`);

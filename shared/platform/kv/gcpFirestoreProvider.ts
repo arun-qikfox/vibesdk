@@ -1,4 +1,5 @@
 import type { KVProvider, KVGetOptions, KVListKey, KVListOptions, KVListResult, KVPutOptions } from './types';
+import type { QueryDocumentSnapshot } from '@google-cloud/firestore';
 
 type EnvRecord = Record<string, unknown>;
 
@@ -172,7 +173,7 @@ export class GcpFirestoreKVProvider implements KVProvider {
 
 		const keys: KVListKey[] = [];
 		await Promise.all(
-			snapshot.docs.map(async (doc) => {
+			snapshot.docs.map(async (doc: QueryDocumentSnapshot<MemoryEntry>) => {
 				const data = doc.data() as MemoryEntry;
 				if (data.expiration && data.expiration <= nowSeconds) {
 					await doc.ref.delete().catch(() => undefined);

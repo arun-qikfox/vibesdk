@@ -12,3 +12,13 @@ output "bucket_url" {
   description = "Public URL to access the storage bucket."
   value       = "gs://${google_storage_bucket.templates.name}"
 }
+
+output "context_bucket_name" {
+  description = "Name of the deployment context bucket if created."
+  value       = try(google_storage_bucket.deployment_contexts[0].name, null)
+}
+
+output "context_bucket_url" {
+  description = "URL of the deployment context bucket if created."
+  value       = try("gs://${google_storage_bucket.deployment_contexts[0].name}", null)
+}

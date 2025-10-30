@@ -66,6 +66,10 @@ output "templates_bucket" {
     name      = module.storage.bucket_name
     self_link = module.storage.bucket_self_link
     url       = module.storage.bucket_url
+    context = module.storage.context_bucket_name != null ? {
+      name = module.storage.context_bucket_name
+      url  = module.storage.context_bucket_url
+    } : null
   }
 }
 
@@ -76,4 +80,16 @@ output "runtime_service" {
     uri             = module.runtime.service_uri
     latest_revision = module.runtime.latest_revision
   }
+}
+
+output "preview_ingress" {
+  description = "Ingress configuration for preview applications."
+  value = var.enable_preview_ingress ? {
+    domain       = module.preview_ingress[0].domain
+    managed_zone = module.preview_ingress[0].managed_zone
+    name_servers = module.preview_ingress[0].name_servers
+    load_balancer = {
+      ip_address = module.preview_ingress[0].load_balancer_ip
+    }
+  } : null
 }

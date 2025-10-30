@@ -6,6 +6,37 @@ locals {
   region     = var.region
 }
 
+resource "google_project_service" "compute" {
+  project            = local.project_id
+  service            = "compute.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "storage" {
+  project            = local.project_id
+  service            = "storage.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "pubsub" {
+  project            = local.project_id
+  service            = "pubsub.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "dns" {
+  project            = local.project_id
+  service            = "dns.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "certificate_manager" {
+  project            = local.project_id
+  service            = "certificatemanager.googleapis.com"
+  disable_on_destroy = false
+}
+
+
 module "networking" {
   source     = "./modules/networking"
   project_id = local.project_id
@@ -55,12 +86,17 @@ module "secrets" {
 }
 
 module "storage" {
-  source      = "./modules/storage"
-  project_id  = local.project_id
-  location    = var.templates_bucket_location
-  bucket_name = var.templates_bucket_name
-  versioning  = var.templates_bucket_versioning
-  labels      = var.templates_bucket_labels
+  source                            = "./modules/storage"
+  project_id                        = local.project_id
+  location                          = var.templates_bucket_location
+  bucket_name                       = var.templates_bucket_name
+  versioning                        = var.templates_bucket_versioning
+  labels                            = var.templates_bucket_labels
+  context_bucket_name               = var.deployment_context_bucket_name
+  context_bucket_location           = var.deployment_context_bucket_location
+  context_bucket_force_destroy      = var.deployment_context_bucket_force_destroy
+  context_bucket_labels             = var.deployment_context_bucket_labels
+  context_bucket_lifecycle_age_days = var.deployment_context_bucket_lifecycle_age_days
 
   runtime_service_accounts = {
     runtime = module.iam.runtime_service_account_email
@@ -68,17 +104,17 @@ module "storage" {
 }
 
 module "sandbox" {
-  source                 = "./modules/sandbox"
-  project_id             = local.project_id
-  region                 = local.region
-  pubsub_topic           = var.sandbox_pubsub_topic
-  job_name               = var.sandbox_job_name
-  job_image              = var.sandbox_job_image
-  job_env                = var.sandbox_job_env
-  job_resource_limits    = var.sandbox_job_resource_limits
-  job_service_account    = var.sandbox_job_service_account
-  job_max_retries        = var.sandbox_job_max_retries
-  job_timeout            = var.sandbox_job_timeout
+  source              = "./modules/sandbox"
+  project_id          = local.project_id
+  region              = local.region
+  pubsub_topic        = var.sandbox_pubsub_topic
+  job_name            = var.sandbox_job_name
+  job_image           = var.sandbox_job_image
+  job_env             = var.sandbox_job_env
+  job_resource_limits = var.sandbox_job_resource_limits
+  job_service_account = var.sandbox_job_service_account
+  job_max_retries     = var.sandbox_job_max_retries
+  job_timeout         = var.sandbox_job_timeout
 }
 
 module "runtime" {
@@ -119,4 +155,18 @@ module "runtime" {
       }
     }
   )
+}
+
+module "preview_ingress" {
+  count             = var.enable_preview_ingress ? 1 : 0
+  source            = "./modules/preview_ingress"
+  project_id        = local.project_id
+  region            = local.region
+  cloud_run_service = module.runtime.service_name
+  preview_domain    = var.preview_domain
+  dns_zone_name     = var.preview_dns_zone_name
+  depends_on = [
+    google_project_service.dns,
+    google_project_service.certificate_manager
+  ]
 }

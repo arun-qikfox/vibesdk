@@ -11,8 +11,17 @@ const REQUIRED_SECRETS = [
 
 type SecretKey = (typeof REQUIRED_SECRETS)[number];
 
+function getEnvRecord(env: Env): Record<string, unknown> {
+	return env as unknown as Record<string, unknown>;
+}
+
+function getEnvStringRecord(env: Env): Record<string, string> {
+	return env as unknown as Record<string, string>;
+}
+
 function hasValue(env: Env, key: SecretKey): boolean {
-	const value = (env as Record<string, unknown>)[key];
+	const envRecord = getEnvRecord(env);
+	const value = envRecord[key];
 	return typeof value === 'string' && value.trim().length > 0;
 }
 
@@ -27,9 +36,10 @@ export async function ensureSecrets(env: Env): Promise<void> {
 				return;
 			}
 			try {
-				const secret = await fetchSecret(env, key);
+				const secret = await fetchSecret(env as unknown as Record<string, unknown>, key);
 				if (secret) {
-					(env as Record<string, string>)[key] = secret;
+					const envRecord = getEnvStringRecord(env);
+					envRecord[key] = secret;
 				} else {
 					console.warn(`Secret "${key}" not found in Secret Manager.`);
 				}

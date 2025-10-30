@@ -250,12 +250,21 @@ async function triggerSandboxJob(
 	};
 }
 
+type PublishResult = SandboxResult & { messageId?: string };
+
 export function createGcpSandboxExecutor(env?: EnvLike): SandboxExecutor {
 	return {
 		async run(request: SandboxExecutionRequest): Promise<SandboxResult> {
-			const publishResult = await publishSandboxMessage(env, request);
+			const publishResult = (await publishSandboxMessage(env, request)) as PublishResult;
 			if (!publishResult.success) {
 				return publishResult;
+			}
+
+			if (!publishResult.messageId) {
+				return {
+					success: false,
+					error: 'Sandbox publish succeeded without messageId.',
+				};
 			}
 
 			const jobResult = await triggerSandboxJob(env, request, publishResult.messageId);

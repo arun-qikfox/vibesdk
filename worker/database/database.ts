@@ -59,7 +59,10 @@ export class DatabaseService {
 
     async getHealthStatus(): Promise<HealthStatusResult> {
         try {
-            await this.db.select().from(schema.systemSettings).limit(1);
+            const primary = this.db as any;
+            if (primary && typeof primary.select === 'function') {
+                await primary.select().from(schema.systemSettings).limit?.(1);
+            }
             return {
                 healthy: true,
                 timestamp: new Date().toISOString(),

@@ -188,6 +188,36 @@ variable "templates_bucket_labels" {
   default     = {}
 }
 
+variable "deployment_context_bucket_name" {
+  description = "Optional bucket used to store Cloud Run deployment contexts."
+  type        = string
+  default     = "vibesdk-templates-contexts"
+}
+
+variable "deployment_context_bucket_location" {
+  description = "Location for the deployment context bucket."
+  type        = string
+  default     = "us-central1"
+}
+
+variable "deployment_context_bucket_force_destroy" {
+  description = "Set to true to allow Terraform to delete the deployment context bucket even if it contains objects."
+  type        = bool
+  default     = false
+}
+
+variable "deployment_context_bucket_labels" {
+  description = "Labels applied to the deployment context bucket."
+  type        = map(string)
+  default     = { purpose = "deployment-contexts" }
+}
+
+variable "deployment_context_bucket_lifecycle_age_days" {
+  description = "Age in days after which deployment context objects are deleted."
+  type        = number
+  default     = 30
+}
+
 variable "sandbox_pubsub_topic" {
   description = "Pub/Sub topic name for sandbox execution requests."
   type        = string
@@ -232,4 +262,21 @@ variable "sandbox_job_timeout" {
   description = "Timeout for sandbox job executions (e.g., '3600s')."
   type        = string
   default     = "3600s"
+}
+
+variable "preview_domain" {
+  description = "Fully qualified domain used for preview apps (e.g., apps.example.com)."
+  type        = string
+}
+
+variable "preview_dns_zone_name" {
+  description = "Name of the Cloud DNS managed zone that hosts preview records."
+  type        = string
+  default     = "preview-apps"
+}
+
+variable "enable_preview_ingress" {
+  description = "Set to false to skip provisioning DNS/TLS resources for preview apps."
+  type        = bool
+  default     = true
 }

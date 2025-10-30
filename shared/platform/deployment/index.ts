@@ -75,13 +75,21 @@ export function registerDeploymentTarget(id: DeploymentTargetId, factory: Target
 	registry.set(id, factory);
 }
 
-export function getDeploymentTarget(env: EnvLike, requestedId?: DeploymentTargetId): DeploymentTarget {
-	const id = requestedId ?? readDefaultTarget(env);
+function toEnvLike(env: unknown): EnvLike {
+	if (env && typeof env === 'object') {
+		return env as Record<string, unknown>;
+	}
+	return null;
+}
+
+export function getDeploymentTarget(env: unknown, requestedId?: DeploymentTargetId): DeploymentTarget {
+	const envLike = toEnvLike(env);
+	const id = requestedId ?? readDefaultTarget(envLike);
 	const factory = registry.get(id);
 	if (!factory) {
 		throw new Error(`Deployment target "${id}" is not registered.`);
 	}
-	return factory(env);
+	return factory(envLike);
 }
 
 // Register built-in targets.
