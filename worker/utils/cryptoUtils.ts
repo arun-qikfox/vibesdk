@@ -46,12 +46,39 @@ export async function timingSafeEqual(a: string, b: string): Promise<boolean> {
     return crypto.subtle.timingSafeEqual(aBuffer, bBuffer);
 }
 
+// In Node.js context, use Node.js crypto; in Workers use Web Crypto API
+const cryptoModule = typeof require !== 'undefined' ? require('crypto') : crypto;
+
+// Fallback timing-safe comparison for environments where crypto.timingSafeEqual isn't available
+function timingSafeComparison(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.length !== b.length) {
+        return false;
+    }
+
+    // Use simple XOR to compare bytes in constant time
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+        result |= a[i] ^ b[i];
+    }
+    return result === 0;
+}
+
 export function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
     if (a.length !== b.length) {
         return false;
     }
-    
-    return crypto.subtle.timingSafeEqual(a, b);
+
+    // Use Node.js crypto.timingSafeEqual if available (e.g., in Express server)
+    if (cryptoModule && typeof cryptoModule.timingSafeEqual === 'function') {
+        try {
+            return cryptoModule.timingSafeEqual(a, b);
+        } catch {
+            // Fallback to timing-safe comparison
+        }
+    }
+
+    // Fallback to timing-safe comparison (Web Crypto API environments)
+    return timingSafeComparison(a, b);
 }
 
 export function generateSecureToken(length: number = 32): string {

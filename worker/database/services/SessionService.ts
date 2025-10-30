@@ -111,8 +111,25 @@ export class SessionService extends BaseService {
             // Hash tokens for storage
             const accessTokenHash = await this.jwtUtils.hashToken(accessToken);
             
-            // Extract request metadata using centralized utility
-            const requestMetadata = extractRequestMetadata(request);
+            // Extract request metadata using centralized utility (with fallback)
+            let requestMetadata;
+            try {
+                requestMetadata = extractRequestMetadata(request);
+            } catch (error) {
+                // Fallback to default metadata if request parsing fails
+                logger.warn('Failed to extract request metadata, using defaults', error);
+                requestMetadata = {
+                    ipAddress: 'unknown',
+                    userAgent: 'unknown',
+                    referer: undefined,
+                    origin: undefined,
+                    acceptLanguage: undefined,
+                    cfConnectingIp: undefined,
+                    cfRay: undefined,
+                    cfCountry: undefined,
+                    cfTimezone: undefined,
+                };
+            }
             
             // Create device info object
             const deviceInfo = requestMetadata.userAgent;

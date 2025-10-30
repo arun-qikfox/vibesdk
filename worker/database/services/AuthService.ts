@@ -552,10 +552,26 @@ export class AuthService extends BaseService {
         identifier: string,
         attemptType: string,
         success: boolean,
-        request: Request
+        request?: Request
     ): Promise<void> {
         try {
-            const requestMetadata = extractRequestMetadata(request);
+            // Skip logging if no request provided (e.g., Express request adapter issues)
+            if (!request) {
+                return;
+            }
+
+            // Extract request metadata with graceful fallback
+            let requestMetadata;
+            try {
+                requestMetadata = extractRequestMetadata(request);
+            } catch (extractError) {
+                // Use default metadata if extraction fails
+                logger.debug('Request metadata extraction failed, using defaults', extractError);
+                requestMetadata = {
+                    ipAddress: 'unknown',
+                    userAgent: 'unknown'
+                };
+            }
 
             const normalizedIp =
                 requestMetadata.ipAddress &&
@@ -576,7 +592,7 @@ export class AuthService extends BaseService {
                 userAgent: normalizedUserAgent,
             });
         } catch (error) {
-            logger.error('Failed to log auth attempt', error);
+            logger.debug('Failed to log auth attempt (non-critical)', error);
         }
     }
 

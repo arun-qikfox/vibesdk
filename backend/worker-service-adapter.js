@@ -38,7 +38,7 @@ function getAuthController(env) {
     if (!authController) {
         // Create authentication controller using AuthService
         authController = {
-            register: async (request, env, ctx, routeContext) => {
+    register: async (request, env, ctx, routeContext) => {
                 console.log('🔄 API Register request received');
                 try {
                     const auth = await getAuthService(env);
@@ -54,12 +54,15 @@ function getAuthController(env) {
                         throw new Error('Email and password are required');
                     }
 
+                    // Adapt Express request to Worker format
+                    const adaptedRequest = adaptExpressToWorkerRequest(request);
+
                     // Use AuthService.register which handles hashing, validation, and session creation
                     const result = await auth.register({
                         email: email.toLowerCase(),
                         password,
                         name
-                    }, request);
+                    }, adaptedRequest);
 
                     console.log(`✅ User registered via AuthService: ${email}`);
 
@@ -104,11 +107,14 @@ function getAuthController(env) {
                         throw new Error('Email and password are required');
                     }
 
+                    // Adapt Express request to Worker format
+                    const adaptedRequest = adaptExpressToWorkerRequest(request);
+
                     // Use AuthService.login which handles password verification and session creation
                     const result = await auth.login({
                         email: email.toLowerCase(),
                         password
-                    }, request);
+                    }, adaptedRequest);
 
                     console.log(`✅ User logged in via AuthService: ${email}`);
 
@@ -307,6 +313,42 @@ async function initializeWorkerServices(env) {
     userService: new UserService(),
     sessionService: new SessionService()
   };
+}
+
+// Adapt Express request to Worker request format
+function adaptExpressToWorkerRequest(expressRequest) {
+  // Create a simple headers object that mimics the Workers Headers API
+  const workerHeaders = {
+    get: function(name) {
+      // Case-insensitive header lookup
+      const lowerName = name.toLowerCase();
+      const rawHeaders = expressRequest.rawHeaders || [];
+
+      // Find header value (case-insensitive)
+      for (let i = 0; i < rawHeaders.length; i += 2) {
+        if (rawHeaders[i].toLowerCase() === lowerName) {
+          return rawHeaders[i + 1] || null;
+        }
+      }
+
+      // Fallback to express request headers
+      return expressRequest.headers[lowerName] ||
+             expressRequest.headers[name] ||
+             null;
+    }
+  };
+
+  const workerRequest = {
+    url: `${expressRequest.protocol}://${expressRequest.hostname || 'localhost'}${expressRequest.originalUrl}`,
+    method: expressRequest.method,
+    headers: workerHeaders,
+  };
+
+  // Copy Express body methods
+  workerRequest.json = () => Promise.resolve(expressRequest.body);
+  workerRequest.text = () => Promise.resolve(JSON.stringify(expressRequest.body));
+
+  return workerRequest;
 }
 
 module.exports = {
