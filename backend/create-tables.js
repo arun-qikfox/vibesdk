@@ -9,14 +9,11 @@ async function createTables() {
       throw new Error('DATABASE_URL environment variable is not set');
     }
 
-    const sql = postgres({
-  host: '127.0.0.1',
-  port: 5432,
-  database: 'vibesdk',
-  username: 'vibesdk-user',
-  password: 'vibesdk123',  // no encoding needed here
-  ssl: false,
-});
+    const sql = postgres(process.env.DATABASE_URL, {
+      max: 10,
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
 
     console.log('📦 Creating core authentication tables...');
 
