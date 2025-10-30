@@ -56,6 +56,7 @@ export function LoginModal({
 	showCloseButton = true,
 }: LoginModalProps) {
 	const { authProviders, hasOAuth, requiresEmailAuth } = useAuth();
+
 	const [mode, setMode] = useState<AuthMode>('login');
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);

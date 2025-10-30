@@ -240,8 +240,7 @@ export class SessionService extends BaseService {
                         gt(schema.sessions.expiresAt, new Date())
                     )
                 )
-                .orderBy(desc(schema.sessions.lastActivity))
-                .all();
+                .orderBy(desc(schema.sessions.lastActivity));
 
             return sessions.map(session => ({
                 id: session.id,
@@ -287,8 +286,7 @@ export class SessionService extends BaseService {
                 .select({ id: schema.sessions.id })
                 .from(schema.sessions)
                 .where(eq(schema.sessions.userId, userId))
-                .orderBy(desc(schema.sessions.lastActivity))
-                .all();
+                .orderBy(desc(schema.sessions.lastActivity));
             
             // Keep only the most recent sessions
             if (sessions.length > SessionService.config.maxSessions) {
@@ -314,13 +312,13 @@ export class SessionService extends BaseService {
      * Get user email (helper method)
      */
     private async getUserEmail(userId: string): Promise<string> {
-        const user = await this.db.db
+        const users = await this.db.db
             .select({ email: schema.users.email })
             .from(schema.users)
             .where(eq(schema.users.id, userId))
-            .get();
-        
-        return user?.email || '';
+            .limit(1);
+
+        return users[0]?.email || '';
     }
     
     /**
@@ -344,9 +342,8 @@ export class SessionService extends BaseService {
                         eq(schema.sessions.isRevoked, false),
                         gt(schema.sessions.expiresAt, new Date())
                     )
-                )
-                .all();
-                
+                );
+
             // Get recent security events (last 24 hours)
             const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
             const recentEvents = await this.db.db
@@ -362,8 +359,7 @@ export class SessionService extends BaseService {
                         gt(schema.auditLogs.createdAt, oneDayAgo)
                     )
                 )
-                .orderBy(desc(schema.auditLogs.createdAt))
-                .all();
+                .orderBy(desc(schema.auditLogs.createdAt));
                 
             const activeSessionCount = activeSessions.length;
             const recentSecurityEvents = recentEvents.length;

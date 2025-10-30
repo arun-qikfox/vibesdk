@@ -48,6 +48,9 @@ debug-tools/*.json
 # Sentry Config File
 .env.sentry-build-plugin
 data-dump
+*.Identifier
+cloud-sql-proxy.x64.exe
 
-infra/gcp/.terraform*
+infra/gcp/.terraform
+infra/gcp/.terraform/*
 *.Identifier

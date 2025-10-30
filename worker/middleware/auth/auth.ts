@@ -34,17 +34,49 @@ export async function authMiddleware(
     env: Env
 ): Promise<AuthUserSession | null> {
     try {
-        // Extract token
+        // First try JWT token authentication
         const token = extractToken(request);
-        
+
         if (token) {
             const userResponse = await validateToken(token, env);
             if (userResponse) {
-                logger.debug('User authenticated', { userId: userResponse.user.id });
+                logger.debug('User authenticated via JWT', { userId: userResponse.user.id });
                 return userResponse;
             }
         }
-        
+
+        // Fallback to session-based authentication for stub development
+        // This mimics what the AuthController stub does for development
+        const cookieHeader = request.headers.get('Cookie');
+        if (cookieHeader && cookieHeader.includes('session=')) {
+            // Extract session ID from cookie created by the stub auth controller
+            const sessionMatch = cookieHeader.match(/session=([^;]+)/);
+            const sessionId = sessionMatch ? sessionMatch[1] : null;
+
+            if (sessionId && sessionId.startsWith('session-')) {
+                // Mock user that matches what the stub creates
+                const userId = sessionId.replace('session-', '');
+                const mockUser = {
+                    id: userId,
+                    email: `user-${userId}@example.com`,
+                    displayName: `User ${userId}`,
+                    username: userId.replace('user-', ''),
+                    avatarUrl: undefined,
+                    bio: undefined,
+                    timezone: undefined,
+                    provider: 'email' as const,
+                    emailVerified: true as const,
+                    createdAt: new Date()
+                };
+
+                logger.debug('User authenticated via session cookie (stub)', { sessionId, userId: mockUser.id });
+                return {
+                    user: mockUser,
+                    sessionId: sessionId
+                };
+            }
+        }
+
         logger.debug('No authentication found');
         return null;
     } catch (error) {

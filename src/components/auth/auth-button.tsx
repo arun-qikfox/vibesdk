@@ -42,6 +42,8 @@ export function AuthButton({ className }: AuthButtonProps) {
 	const navigate = useNavigate();
 	const [showLoginModal, setShowLoginModal] = useState(false);
 
+
+
 	if (isLoading) {
 		return <Skeleton className="w-10 h-10 rounded-full" />;
 	}

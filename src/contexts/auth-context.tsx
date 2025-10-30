@@ -102,6 +102,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthProviders(response.data.providers);
         setHasOAuth(response.data.hasOAuth);
         setRequiresEmailAuth(response.data.requiresEmailAuth);
+      } else {
+        // Fallback to defaults
+        setAuthProviders({ google: false, github: false, email: true });
+        setHasOAuth(false);
+        setRequiresEmailAuth(true);
       }
     } catch (error) {
       console.warn('Failed to fetch auth providers:', error);
@@ -116,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkAuth = useCallback(async () => {
     try {
       const response = await apiClient.getProfile(true);
-      
+
       if (response.success && response.data?.user) {
         setUser({ ...response.data.user, isAnonymous: false } as AuthUser);
         setToken(null); // Profile endpoint doesn't return token, cookies are used
@@ -126,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           sessionId: response.data.sessionId || response.data.user.id,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours expiry
         });
-        
+
         // Setup token refresh
         setupTokenRefresh();
       } else {

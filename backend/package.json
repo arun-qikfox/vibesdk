@@ -1,0 +1,22 @@
+{
+  "name": "vibesdk-backend",
+  "version": "1.0.0",
+  "description": "Hono API server with Worker controllers for VibSDK frontend",
+  "main": "hono-server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node hono-server.js",
+    "dev": "node hono-server.js",
+    "db:migrate": "node -e \"const pg = require('pg'); const fs = require('fs'); const path = require('path'); require('dotenv').config({path: path.join(__dirname, '..', '.env')}); const client = new pg.Client(process.env.DATABASE_URL); console.log('Connecting to DB...'); client.connect().then(() => {console.log('Connected to database successfully'); const files = fs.readdirSync(path.join(__dirname, '..', 'migrations')).filter(f => f.endsWith('.sql')).sort(); return Promise.all(files.map(file => { const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', file), 'utf8'); console.log('Running: ' + file); return client.query(sql).then(() => console.log('✅ ' + file + ' completed')) })).then(() => client.end().then(() => console.log('🎉 All migrations complete!'))) }).catch(e => { console.error('Migration error:', e.message); client.end(); process.exit(1) })\""
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.5",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.19.0",
+    "hono": "^4.10.3",
+    "node-fetch": "^3.3.2",
+    "pg": "^8.13.1",
+    "web-streams-polyfill": "^4.2.0"
+  }
+}

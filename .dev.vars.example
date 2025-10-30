@@ -5,11 +5,6 @@
 # Essential Secrets:
 #CLOUDFLARE_AI_GATEWAY_TOKEN="" # If this has read and edit permissions, the AI Gateway will be created automatically. run is required at the least
 
-# Runtime / Provider defaults
-RUNTIME_PROVIDER="gcp" # Options: cloudflare, gcp
-#GCP_PROJECT_ID=""
-#GCP_REGION="us-central1"
-
 # Provider specific secrets:
 #ANTHROPIC_API_KEY=""
 #OPENAI_API_KEY=""

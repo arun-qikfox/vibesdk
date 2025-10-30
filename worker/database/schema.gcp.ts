@@ -588,7 +588,7 @@ export const authAttempts = pgTable(
 			>()
 			.notNull(),
 		success: boolean('success').notNull(),
-		ipAddress: text('ip_address').notNull(),
+		ipAddress: text('ip_address'),
 		userAgent: text('user_agent'),
 		attemptedAt: timestamp('attempted_at', { withTimezone: true }).default(
 			sql`CURRENT_TIMESTAMP`,

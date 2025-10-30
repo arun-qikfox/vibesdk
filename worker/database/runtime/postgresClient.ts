@@ -62,12 +62,12 @@ function resolveConnection(env: DatabaseRuntimeEnv): NormalizedConnectionConfig 
     if (poolMin > 0) {
         baseOptions.min = poolMin;
     }
-
+    
     const sql = databaseUrl.includes('@//cloudsql/')
         ? createCloudSqlClient(env, databaseUrl, baseOptions, sslMode)
         : postgres(databaseUrl, {
               ...baseOptions,
-              ssl: mapSslMode(sslMode),
+              ssl: false
           });
 
     return { sql };
