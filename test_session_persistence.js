@@ -47,8 +47,12 @@ async function testSessionPersistence() {
     console.log('🧪 Testing JWT token flow for Hono backend...\n');
 
     try {
-        // Step 1: Register new user
-        console.log('📝 Step 1: Registering new user...');
+        // Step 1: Check if cookies are already set
+        const cookiesBeforeLogin = global.cookieJar || 'None';
+        console.log('🍪 Cookies before login:', cookiesBeforeLogin);
+
+        // Step 2: Register new user
+        console.log('📝 Step 2: Registering new user...');
         const testEmail = `test-${Date.now()}@example.com`;
         const testPassword = 'TestPassword123!';
 
@@ -61,6 +65,10 @@ async function testSessionPersistence() {
                 name: 'Test User'
             }),
         });
+
+        // Check cookies set by registration
+        const cookiesAfterRegister = global.cookieJar || 'None';
+        console.log('🍪 Cookies after register:', cookiesAfterRegister);
 
         const registerText = await registerResponse.text();
         const registerData = JSON.parse(registerText);

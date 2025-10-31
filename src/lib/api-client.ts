@@ -228,19 +228,21 @@ class ApiClient {
 
 	/**
 	 * Extract JWT token from cookies as fallback
-	 * This supports both Authorization header and cookie-based auth
+	 * Uses readable cookie for Authorization header extraction
 	 */
 	private extractJwtFromCookies(): boolean {
 		try {
 			const cookies = document.cookie.split(';');
+			// Use the readable cookie (not HttpOnly) for client-side access
 			const accessTokenCookie = cookies.find(cookie =>
-				cookie.trim().startsWith('accessToken=')
+				cookie.trim().startsWith('accessTokenReadable=')
 			);
 
 			if (accessTokenCookie) {
 				const token = accessTokenCookie.split('=')[1];
 				if (token) {
 					this.jwtToken = token;
+					console.log('JWT token extracted from cookie for Authorization header');
 					return true;
 				}
 			}

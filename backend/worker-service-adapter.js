@@ -66,7 +66,7 @@ function getAuthController(env) {
 
                     console.log(`✅ User registered via AuthService: ${email}`);
 
-                    return new Response(JSON.stringify({
+                    const response = new Response(JSON.stringify({
                         success: true,
                         data: {
                             user: result.user,
@@ -76,13 +76,16 @@ function getAuthController(env) {
                     }), {
                         status: 200,
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Set-Cookie': [
-                                `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`,
-                                `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`
-                            ].join(', ')
+                            'Content-Type': 'application/json'
                         }
                     });
+
+                    // Set cookies as separate headers (HTTP requires this)
+                    response.headers.append('Set-Cookie', `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+                    response.headers.append('Set-Cookie', `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+                    response.headers.append('Set-Cookie', `accessTokenReadable=${result.accessToken}; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+
+                    return response;
                 } catch (error) {
                     console.error('Registration error:', error);
                     const statusCode = error.message?.includes('already registered') ? 400 : 500;
@@ -121,7 +124,7 @@ function getAuthController(env) {
 
                     console.log(`✅ User logged in via AuthService: ${email}`);
 
-                    return new Response(JSON.stringify({
+                    const response = new Response(JSON.stringify({
                         success: true,
                         data: {
                             user: result.user,
@@ -131,13 +134,16 @@ function getAuthController(env) {
                     }), {
                         status: 200,
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Set-Cookie': [
-                                `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`,
-                                `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`
-                            ].join(', ')
+                            'Content-Type': 'application/json'
                         }
                     });
+
+                    // Set cookies as separate headers (HTTP requires this)
+                    response.headers.append('Set-Cookie', `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+                    response.headers.append('Set-Cookie', `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+                    response.headers.append('Set-Cookie', `accessTokenReadable=${result.accessToken}; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+
+                    return response;
                 } catch (error) {
                     console.error('Login error:', error);
                     return new Response(JSON.stringify({
@@ -172,19 +178,22 @@ function getAuthController(env) {
             },
 
             logout: (request, env, ctx, routeContext) => {
-                return Promise.resolve(new Response(JSON.stringify({
+                const response = new Response(JSON.stringify({
                     success: true,
                     data: { message: 'Logged out successfully' }
                 }), {
                     status: 200,
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Set-Cookie': [
-                            'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
-                            'accessToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
-                        ].join(', ')
+                        'Content-Type': 'application/json'
                     }
-                }));
+                });
+
+                // Clear all cookies by setting them to expire immediately
+                response.headers.append('Set-Cookie', 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+                response.headers.append('Set-Cookie', 'accessToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
+                response.headers.append('Set-Cookie', 'accessTokenReadable=; SameSite=Lax; Path=/; Max-Age=0');
+
+                return Promise.resolve(response);
             },
 
             // Keep other stub methods for now
