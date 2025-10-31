@@ -80,10 +80,9 @@ function getAuthController(env) {
                         }
                     });
 
-                    // Set cookies as separate headers (HTTP requires this)
+                    // Set single readable cookie for JWT token (eliminates duplication)
                     response.headers.append('Set-Cookie', `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
-                    response.headers.append('Set-Cookie', `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
-                    response.headers.append('Set-Cookie', `accessTokenReadable=${result.accessToken}; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+                    response.headers.append('Set-Cookie', `accessToken=${result.accessToken}; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
 
                     return response;
                 } catch (error) {
@@ -138,10 +137,9 @@ function getAuthController(env) {
                         }
                     });
 
-                    // Set cookies as separate headers (HTTP requires this)
+                    // Set single readable cookie for JWT token (eliminates duplication)
                     response.headers.append('Set-Cookie', `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
-                    response.headers.append('Set-Cookie', `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
-                    response.headers.append('Set-Cookie', `accessTokenReadable=${result.accessToken}; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
+                    response.headers.append('Set-Cookie', `accessToken=${result.accessToken}; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`);
 
                     return response;
                 } catch (error) {
@@ -188,10 +186,9 @@ function getAuthController(env) {
                     }
                 });
 
-                // Clear all cookies by setting them to expire immediately
+                // Clear authentication cookies
                 response.headers.append('Set-Cookie', 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
-                response.headers.append('Set-Cookie', 'accessToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');
-                response.headers.append('Set-Cookie', 'accessTokenReadable=; SameSite=Lax; Path=/; Max-Age=0');
+                response.headers.append('Set-Cookie', 'accessToken=; SameSite=Lax; Path=/; Max-Age=0');
 
                 return Promise.resolve(response);
             },

@@ -228,14 +228,14 @@ class ApiClient {
 
 	/**
 	 * Extract JWT token from cookies as fallback
-	 * Uses readable cookie for Authorization header extraction
+	 * Uses single readable cookie for Authorization header extraction
 	 */
 	private extractJwtFromCookies(): boolean {
 		try {
 			const cookies = document.cookie.split(';');
-			// Use the readable cookie (not HttpOnly) for client-side access
+			// Use the single readable cookie for client-side access
 			const accessTokenCookie = cookies.find(cookie =>
-				cookie.trim().startsWith('accessTokenReadable=')
+				cookie.trim().startsWith('accessToken=')
 			);
 
 			if (accessTokenCookie) {
