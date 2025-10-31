@@ -179,6 +179,7 @@ class ApiClient {
 	private baseUrl: string;
 	private defaultHeaders: Record<string, string>;
 	private csrfTokenInfo: CSRFTokenInfo | null = null;
+	private jwtToken: string | null = null;
 
 	constructor(config: ApiClientConfig = {}) {
 		const providedBase =
@@ -199,6 +200,17 @@ class ApiClient {
 	private getAuthHeaders(): Record<string, string> {
 		const headers: Record<string, string> = {};
 
+		// Add JWT token to Authorization header if available
+		if (this.jwtToken) {
+			headers['Authorization'] = `Bearer ${this.jwtToken}`;
+		} else {
+			// Fall back to storing JWT in cookies (backward compatibility)
+			// Extract accessToken from cookies if Authorization header not set
+			if (this.extractJwtFromCookies()) {
+				headers['Authorization'] = `Bearer ${this.jwtToken}`;
+			}
+		}
+
 		// Add session token for anonymous users if not authenticated
 		// This will be handled automatically by cookies/credentials for authenticated users
 		const sessionToken = localStorage.getItem('anonymous_session_token');
@@ -212,6 +224,30 @@ class ApiClient {
 		}
 
 		return headers;
+	}
+
+	/**
+	 * Extract JWT token from cookies as fallback
+	 * This supports both Authorization header and cookie-based auth
+	 */
+	private extractJwtFromCookies(): boolean {
+		try {
+			const cookies = document.cookie.split(';');
+			const accessTokenCookie = cookies.find(cookie =>
+				cookie.trim().startsWith('accessToken=')
+			);
+
+			if (accessTokenCookie) {
+				const token = accessTokenCookie.split('=')[1];
+				if (token) {
+					this.jwtToken = token;
+					return true;
+				}
+			}
+		} catch (error) {
+			// Ignore cookie parsing errors
+		}
+		return false;
 	}
 
 	/**
@@ -1075,10 +1111,21 @@ class ApiClient {
 		email: string;
 		password: string;
 	}): Promise<ApiResponse<LoginResponseData>> {
-		return this.request<LoginResponseData>('/api/auth/login', {
+		const response = await this.request<LoginResponseData>('/api/auth/login', {
 			method: 'POST',
 			body: credentials,
 		});
+
+		// Extract and store JWT token from successful login response data (if available)
+		if (response.success && response.data && (response.data as any).accessToken) {
+			this.jwtToken = (response.data as any).accessToken;
+			console.log('JWT token stored from login');
+		} else {
+			// Fallback: extract from cookies if not in response
+			this.extractJwtFromCookies();
+		}
+
+		return response;
 	}
 
 	/**
@@ -1089,10 +1136,21 @@ class ApiClient {
 		password: string;
 		name?: string;
 	}): Promise<ApiResponse<RegisterResponseData>> {
-		return this.request<RegisterResponseData>('/api/auth/register', {
+		const response = await this.request<RegisterResponseData>('/api/auth/register', {
 			method: 'POST',
 			body: data,
 		});
+
+		// Extract and store JWT token from successful registration response data (if available)
+		if (response.success && response.data && (response.data as any).accessToken) {
+			this.jwtToken = (response.data as any).accessToken;
+			console.log('JWT token stored from registration');
+		} else {
+			// Fallback: extract from cookies if not in response
+			this.extractJwtFromCookies();
+		}
+
+		return response;
 	}
 
 	/**

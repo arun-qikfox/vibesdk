@@ -15,6 +15,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.19.0",
     "hono": "^4.10.3",
+    "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2",
     "pg": "^8.13.1",
     "web-streams-polyfill": "^4.2.0"

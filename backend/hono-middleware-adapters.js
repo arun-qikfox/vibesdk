@@ -63,10 +63,35 @@ function initializeMiddlewareAdapters(globalEnv) {
                     const decoded = jwt.verify(token, jwtSecret);
                     console.log('✅ JWT decoded:', decoded.sub);
 
-                    // Get user from our database
-                    const { db } = require('./worker-service-adapter').db;
-                    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.sub);
+                    // Get user from database using the global auth service
+                    const authService = global.cachedAuthService;
+                    if (!authService) {
+                        console.log('❌ No auth service available');
+                        return c.json(formatApiResponse('Authentication service unavailable', false), 500);
+                    }
 
+                    // Use the AuthService's database directly to find user
+                    const { eq } = await import('drizzle-orm');
+                    const { schema } = await import('../worker/database/schema.ts');
+
+                    const userRecords = await authService.database
+                        .select({
+                            id: schema.users.id,
+                            email: schema.users.email,
+                            displayName: schema.users.displayName,
+                            username: schema.users.username,
+                            avatarUrl: schema.users.avatarUrl,
+                            bio: schema.users.bio,
+                            timezone: schema.users.timezone,
+                            provider: schema.users.provider,
+                            emailVerified: schema.users.emailVerified,
+                            createdAt: schema.users.createdAt
+                        })
+                        .from(schema.users)
+                        .where(eq(schema.users.id, decoded.sub))
+                        .limit(1);
+
+                    const user = userRecords[0];
                     if (!user) {
                         console.log('❌ User not found in database');
                         return c.json(formatApiResponse('User not found', false), 401);
@@ -75,16 +100,16 @@ function initializeMiddlewareAdapters(globalEnv) {
                     const userData = {
                         id: user.id,
                         email: user.email,
-                        displayName: user.displayName,
-                        provider: user.provider,
-                        emailVerified: !!user.emailVerified
+                        displayName: user.displayName || user.email.split('@')[0],
+                        provider: user.provider || 'email',
+                        emailVerified: user.emailVerified || false
                     };
 
                     console.log('✅ User authenticated:', userData.id, 'Email:', userData.email);
 
                     // Set user context like worker does
                     c.set('user', userData);
-                    c.set('sessionId', user.id);
+                    c.set('sessionId', decoded.sub); // Use subject from JWT, not user.id
 
                     await next();
 

@@ -77,8 +77,16 @@ async function setupGlobalEnvironment() {
         console.log(`DB client: ${typeof global.env.DB}, DB constructor: ${global.env.DB?.constructor?.name || 'undefined'}`);
         console.log(`RUNTIME_PROVIDER in global.env: ${global.env.RUNTIME_PROVIDER}`);
 
-        const workerServices = initializeWorkerServices(global.env);
+        const workerServices = await initializeWorkerServices(global.env);
         global.env.__services__ = workerServices;
+
+        // Cache the AuthService instance globally for middleware access
+        if (workerServices.authService) {
+            global.cachedAuthService = workerServices.authService;
+            console.log('✅ AuthService cached globally for middleware');
+        } else {
+            console.warn('⚠️  No AuthService instance available to cache globally');
+        }
 
         console.log('✅ Environment and services setup complete');
         console.log(`📍 Runtime: ${global.env.RUNTIME_PROVIDER}`);

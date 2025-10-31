@@ -2,6 +2,11 @@ const express = require('express');
 const cors = require('cors');
 const { setupGlobalEnvironment } = require('./setup-env');
 
+const { adaptExpressToWorkerRequest } = require('./worker-service-adapter');
+
+// Import authentication middleware adapter
+const { createAuthMiddleware } = require('./auth-middleware');
+
 // Create Express application
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -20,6 +25,14 @@ const PORT = process.env.PORT || 3001;
         }));
         app.use(express.json());
         app.use(express.urlencoded({ extended: true }));
+
+        // Add authentication middleware (must be after cookie parser setup)
+        const cookieParser = require('cookie-parser');
+        app.use(cookieParser());
+
+        // Apply authentication middleware to all /api routes
+        const authMiddleware = createAuthMiddleware();
+        app.use('/api', authMiddleware);
 
         // Basic error handling middleware
         app.use((error, req, res, next) => {
@@ -58,12 +71,23 @@ app.get('/api/auth/csrf-token', (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
     try {
         console.log('🔄 Login request received');
-        const result = await authController.login({
-            method: 'POST',
-            json: () => Promise.resolve(req.body)
-        });
+        const adaptedRequest = adaptExpressToWorkerRequest(req);
+        const result = await authController.login(adaptedRequest);
         const data = await result.json();
         console.log('✅ Login handled by AuthService');
+
+        // Forward cookies from Worker response to Express response
+        if (result.headers.has('Set-Cookie')) {
+            const cookies = result.headers.get('Set-Cookie');
+            console.log('🔍 Processing Set-Cookie headers:', cookies);
+            // Handle multiple cookies (may be comma-separated)
+            const cookieList = cookies.split(',');
+            cookieList.forEach(cookie => {
+                console.log('Setting cookie:', cookie);
+                res.setHeader('Set-Cookie', cookie.trim());
+            });
+        }
+
         res.json(data);
     } catch (error) {
         console.error('❌ Login error:', error);
@@ -78,12 +102,23 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
     try {
         console.log('🔄 Registration request received');
-        const result = await authController.register({
-            method: 'POST',
-            json: () => Promise.resolve(req.body)
-        });
+        const adaptedRequest = adaptExpressToWorkerRequest(req);
+        const result = await authController.register(adaptedRequest);
         const data = await result.json();
         console.log('✅ Registration handled by AuthService');
+
+        // Forward cookies from Worker response to Express response
+        if (result.headers.has('Set-Cookie')) {
+            const cookies = result.headers.get('Set-Cookie');
+            console.log('🔍 Processing Set-Cookie headers:', cookies);
+            // Handle multiple cookies (may be comma-separated)
+            const cookieList = cookies.split(',');
+            cookieList.forEach(cookie => {
+                console.log('Setting cookie:', cookie);
+                res.setHeader('Set-Cookie', cookie.trim());
+            });
+        }
+
         res.json(data);
     } catch (error) {
         console.error('❌ Registration error:', error);
@@ -96,17 +131,30 @@ app.post('/api/auth/register', async (req, res) => {
 
 // GET /api/auth/profile
 app.get('/api/auth/profile', (req, res) => {
+    // This endpoint requires authentication
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            error: 'Authentication required'
+        });
+    }
+
+    // Return real user data from authentication middleware
     res.json({
         success: true,
         data: {
-            id: 'user-123',
-            email: 'user@example.com',
-            displayName: 'Test User',
-            bio: 'Test user bio',
-            role: 'user',
-            createdAt: new Date().toISOString(),
+            id: req.user.id,
+            email: req.user.email,
+            displayName: req.user.displayName || req.user.email.split('@')[0],
+            username: req.user.username,
+            avatarUrl: req.user.avatarUrl,
+            bio: req.user.bio || '',
+            timezone: req.user.timezone || 'UTC',
+            provider: req.user.provider || 'email',
+            emailVerified: req.user.emailVerified || false,
+            createdAt: req.user.createdAt || new Date().toISOString(),
             theme: 'system',
-            timezone: 'UTC'
+            role: 'user'
         }
     });
 });

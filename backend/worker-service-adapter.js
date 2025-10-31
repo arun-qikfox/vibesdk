@@ -77,7 +77,10 @@ function getAuthController(env) {
                         status: 200,
                         headers: {
                             'Content-Type': 'application/json',
-                            'Set-Cookie': `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`
+                            'Set-Cookie': [
+                                `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`,
+                                `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`
+                            ].join(', ')
                         }
                     });
                 } catch (error) {
@@ -129,7 +132,10 @@ function getAuthController(env) {
                         status: 200,
                         headers: {
                             'Content-Type': 'application/json',
-                            'Set-Cookie': `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`
+                            'Set-Cookie': [
+                                `session=${result.sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`,
+                                `accessToken=${result.accessToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${24 * 60 * 60}`
+                            ].join(', ')
                         }
                     });
                 } catch (error) {
@@ -173,7 +179,10 @@ function getAuthController(env) {
                     status: 200,
                     headers: {
                         'Content-Type': 'application/json',
-                        'Set-Cookie': 'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
+                        'Set-Cookie': [
+                            'session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',
+                            'accessToken=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'
+                        ].join(', ')
                     }
                 }));
             },
@@ -302,9 +311,18 @@ async function initializeWorkerServices(env) {
     authService = new AuthService(global.env);
     console.log('✅ AuthService initialized successfully, constructor:', authService.constructor.name);
   } catch (error) {
-    console.warn('⚠️  Could not initialize AuthService:', error.message);
+    console.warn('⚠️  Could not initialize full AuthService:', error.message);
     console.warn('Stack trace:', error.stack);
-    authService = null;
+
+    // Fallback to minimal auth service that provides just what the middleware needs
+    console.log('🔄 Creating minimal auth service for middleware...');
+    try {
+      authService = await createMinimalAuthService(global.env);
+      console.log('✅ Minimal AuthService created for middleware');
+    } catch (minimalError) {
+      console.warn('⚠️  Could not create minimal AuthService either:', minimalError.message);
+      authService = null;
+    }
   }
 
   console.log('✅ Authentication services ready');
@@ -351,10 +369,67 @@ function adaptExpressToWorkerRequest(expressRequest) {
   return workerRequest;
 }
 
+// Create a minimal auth service that just provides database access for middleware
+async function createMinimalAuthService(env) {
+  console.log('🔄 Setting up minimal auth service for middleware...');
+
+  class MinimalAuthService {
+    constructor(env) {
+      this.env = env;
+      if (!env.DB) {
+        throw new Error('Database client not available in minimal auth service');
+      }
+      this.database = env.DB;
+    }
+
+    // Provide a user lookup method for the middleware - use raw SQL to avoid schema imports
+    async findUserById(userId) {
+      try {
+        console.log('🔍 Looking up user with ID:', userId);
+
+        // Use raw SQL to avoid TypeScript schema imports
+        const users = await this.database.prepare(`
+          SELECT id, email, display_name, username, avatar_url, bio, timezone, provider, email_verified, created_at
+          FROM users
+          WHERE id = ? AND deleted_at IS NULL
+          LIMIT 1
+        `);
+
+        const result = await users.bind(userId).first();
+
+        if (result) {
+          // Map to expected format
+          return {
+            id: result.id,
+            email: result.email,
+            displayName: result.display_name,
+            username: result.username,
+            avatarUrl: result.avatar_url,
+            bio: result.bio,
+            timezone: result.timezone,
+            provider: result.provider,
+            emailVerified: result.email_verified,
+            createdAt: result.created_at
+          };
+        }
+
+        return null;
+      } catch (error) {
+        console.error('❌ Minimal auth service error:', error.message);
+        return null;
+      }
+    }
+  }
+
+  return new MinimalAuthService(env);
+}
+
 module.exports = {
   getAuthController,
   CodingAgentController,
   createLogger,
   initializeWorkerServices,
-  loadWorkerServices
+  loadWorkerServices,
+  adaptExpressToWorkerRequest,
+  createMinimalAuthService
 };
