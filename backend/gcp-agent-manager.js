@@ -6,14 +6,14 @@ let websocketModulePromise = null;
 
 async function loadAgentModule() {
     if (!agentModulePromise) {
-        agentModulePromise = import('../worker/agents/core/postgresAgent.js');
+        agentModulePromise = import('../worker/agents/core/postgresAgent.cjs');
     }
     return agentModulePromise;
 }
 
 async function loadWebsocketModule() {
     if (!websocketModulePromise) {
-        websocketModulePromise = import('../worker/agents/core/websocket.js');
+        websocketModulePromise = import('../worker/agents/core/websocket.cjs');
     }
     return websocketModulePromise;
 }

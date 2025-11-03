@@ -13,8 +13,19 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const crypto = require('crypto');
 
+// Ensure fetch is available globally for Google Generative AI in Node environments
+if (typeof global.fetch !== 'function') {
+    global.fetch = async (...args) => {
+        const { default: fetch } = await import('node-fetch');
+        return fetch(...args);
+    };
+}
+
 // Import shared types for consistency
 const { AIModels, AgentActionKey } = require('../shared/types/models.cjs');
+
+// Import agent config to use the correct models
+const { AGENT_CONFIG } = require('../worker/agents/inferutils/config.ts');
 
 /**
  * Gemini AI Service Configuration
@@ -22,32 +33,35 @@ const { AIModels, AgentActionKey } = require('../shared/types/models.cjs');
  */
 class GeminiConfig {
     static getModels() {
+        // Use models from the centralized agent configuration
+        const templateConfig = AGENT_CONFIG.templateSelection;
+
         return {
-            // Complex reasoning for blueprint generation and analysis
-            [AIModels.GEMINI_PRO]: {
-                model: 'gemini-1.5-pro-latest',
-                temperature: 0.7,
-                maxTokens: 4096,
+            // Template selection model (primary)
+            [AIModels.GEMINI_FLASH_LITE]: {
+                model: templateConfig.name.replace('google-ai-studio/', ''),
+                temperature: templateConfig.temperature || 0.6,
+                maxTokens: templateConfig.max_tokens || 2000,
                 topP: 0.95,
                 topK: 40
             },
 
-            // Fast responses for code generation
+            // Template selection fallback model
             [AIModels.GEMINI_FLASH]: {
-                model: 'gemini-1.5-flash-latest',
-                temperature: 0.2, // Lower temperature for more deterministic code output
+                model: (templateConfig.fallbackModel || AIModels.GEMINI_2_5_FLASH).replace('google-ai-studio/', ''),
+                temperature: 0.2,
                 maxTokens: 8192,
                 topP: 0.95,
                 topK: 40
             },
 
-            // Fast and lightweight for simple tasks
-            [AIModels.GEMINI_FLASH_LITE]: {
-                model: 'gemini-1.0-pro',
-                temperature: 0.1,
-                maxTokens: 2048,
-                topP: 0.8,
-                topK: 20
+            // Blueprint generation model
+            [AIModels.GEMINI_PRO]: {
+                model: AGENT_CONFIG.blueprint.name.replace('google-ai-studio/', ''),
+                temperature: AGENT_CONFIG.blueprint.temperature || 0.7,
+                maxTokens: AGENT_CONFIG.blueprint.max_tokens || 64000,
+                topP: 0.95,
+                topK: 40
             }
         };
     }
@@ -204,7 +218,6 @@ class GeminiAIService {
         }
 
         // Configure Google Generative AI for Node.js environment
-        // The library should automatically use Node.js fetch when available
         this.genAI = new GoogleGenerativeAI(apiKey);
         this.models = GeminiConfig.getModels();
 
@@ -235,12 +248,14 @@ class GeminiAIService {
                     temperature: options.temperature || modelConfig.temperature,
                     maxOutputTokens: options.maxTokens || modelConfig.maxTokens,
                     topP: options.topP || modelConfig.topP,
-                    topK: options.topK || modelConfig.topK
+                    topK: options.topK || modelConfig.topK,
+                    ...(options.responseMimeType && { responseMimeType: options.responseMimeType })
                 }
             });
 
             // Handle images if provided
             let finalPrompt = prompt;
+            
             if (options.images && options.images.length > 0) {
                 // Gemini supports multimodal input - convert images to proper format
                 const imageParts = await Promise.all(options.images.map(async (image) => {
@@ -249,12 +264,16 @@ class GeminiAIService {
 
                 finalPrompt = [prompt, ...imageParts];
             }
-
+            console.log("*********** final prompt", model, finalPrompt)
             const result = await model.generateContent(finalPrompt);
             const response = await result.response;
 
-            const generatedText = response.text();
+            const generatedText = await this.extractTextFromResponse(response);
             const usage = this.extractUsageInfo(response);
+
+            if (!generatedText) {
+                this.logger.warn('Gemini AI returned empty text content', { model: modelName });
+            }
 
             this.logger.info(`Content generated successfully`, {
                 model: modelName,
@@ -264,7 +283,7 @@ class GeminiAIService {
             });
 
             return {
-                text: generatedText,
+                text: generatedText || '',
                 usage: {
                     inputTokens: usage?.inputTokens || 0,
                     outputTokens: usage?.outputTokens || 0,
@@ -376,29 +395,143 @@ class GeminiAIService {
     }
 
     /**
-     * Template analysis and selection
-     * Using fallback mechanism for now due to Node.js compatibility issues with Google Generative AI
+     * Template analysis and selection using Gemini AI
      */
     async analyzeTemplates(query, templates) {
-        this.logger.info('Using fallback template analysis (Gemini AI temporarily disabled)', { templateCount: templates.length });
+        try {
+            this.logger.info('Analyzing templates with Gemini AI', { templateCount: templates.length, query: query.substring(0, 50) + '...' });
 
-        // For now, use intelligent fallback selection based on query keywords
-        // This provides the same functionality as the AI would, but without external dependencies
-        const selectedTemplate = this.selectTemplateByKeywords(query, templates);
+            const modelName = AIModels.GEMINI_FLASH_LITE; // Use config-specified model for template selection
 
-        return {
-            selectedTemplateName: selectedTemplate.selectedTemplateName,
-            matchConfidence: selectedTemplate.matchConfidence,
-            reasoning: selectedTemplate.reasoning,
-            alternatives: selectedTemplate.alternativeTemplates || [],
-            customizations: selectedTemplate.customizationsNeeded || [],
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, model: 'fallback' },
-            metadata: {
-                model: 'fallback-keyword-analysis',
-                timestamp: new Date().toISOString(),
-                requestId: this.generateRequestId()
+            const prompt = `Analyze the following user query and recommend the most suitable template from the available options.
+
+User Query: "${query}"
+
+Available Templates:
+${templates.map((t, i) => `${i + 1}. ${t.name}: ${t.description?.selection || t.description || 'No description'}`).join('\n')}
+
+Instructions:
+- Consider the user's intent and technical requirements
+- Match templates to the most appropriate use case
+- Provide reasoning for your choice
+- Suggest alternatives if relevant
+
+Respond with valid JSON in this exact format:
+{
+  "selectedTemplateName": "exact-template-name-from-list",
+  "matchConfidence": 0.95,
+  "reasoning": "brief explanation of why this template was selected",
+  "alternativeTemplates": ["alternative1", "alternative2"],
+  "customizationsNeeded": ["any specific modifications needed"]
+}`;
+
+            const result = await this.generateContent(modelName, prompt, {
+                temperature: 0.1, // Very low temperature for JSON structure
+                maxTokens: 1000,
+                responseMimeType: "application/json" // Force JSON response
+            });
+
+            this.logger.info('****** Gemini AI response text', result);
+
+            const analysis = this.parseTemplateAnalysis(result.text);
+
+            this.logger.info('Gemini AI template analysis completed', {
+                selected: analysis.selectedTemplateName,
+                confidence: analysis.matchConfidence
+            });
+
+            const selection = {
+                selectedTemplateName: analysis.selectedTemplateName || templates[0]?.name,
+                matchConfidence: analysis.matchConfidence || 0.5,
+                reasoning: analysis.reasoning || 'AI-powered template selection',
+                alternatives: analysis.alternativeTemplates || [],
+                customizations: analysis.customizationsNeeded || [],
+                usage: result.usage,
+                metadata: result.metadata
+            };
+
+            return selection;
+
+        } catch (error) {
+            this.logger.error('Gemini AI template analysis failed', error);
+
+            // Fallback to keyword-based selection only when AI completely fails
+            const selectedTemplate = this.selectTemplateByKeywords(query, templates);
+
+            return {
+                selectedTemplateName: selectedTemplate.selectedTemplateName,
+                matchConfidence: selectedTemplate.matchConfidence,
+                reasoning: `Fallback selection (${selectedTemplate.reasoning})`,
+                alternatives: selectedTemplate.alternativeTemplates || [],
+                customizations: selectedTemplate.customizationsNeeded || [],
+                usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, model: 'fallback-keyword-analysis' },
+                metadata: {
+                    model: 'fallback-keyword-analysis',
+                    timestamp: new Date().toISOString(),
+                    requestId: this.generateRequestId(),
+                    error: error.message
+                }
+            };
+        }
+    }
+
+    /**
+     * Try to enhance keyword selection with AI (optional)
+     */
+    async tryEnhanceWithAI(query, templates, keywordSelection) {
+        try {
+            const modelName = AIModels.GEMINI_FLASH;
+
+            const prompt = `Based on this user query: "${query}"
+
+The keyword analysis selected: "${keywordSelection.selectedTemplateName}" with reasoning: "${keywordSelection.reasoning}"
+
+Available templates: ${templates.map(t => `"${t.name}"`).join(', ')}
+
+Should a different template be selected? Consider:
+- User's technical intent and requirements
+- Better framework/technology matches
+- More appropriate architecture patterns
+
+Respond with JSON:
+{
+  "useAISelection": true,
+  "selectedTemplateName": "better-template-if-any",
+  "matchConfidence": 0.95,
+  "reasoning": "why AI chose differently or confirmed keyword choice",
+  "enhancement": "what AI added beyond keywords"
+}`;
+
+            const result = await this.generateContent(modelName, prompt, {
+                temperature: 0.2,
+                maxTokens: 500
+            });
+
+            const enhancement = this.parseTemplateAnalysis(result.text);
+
+            if (enhancement.useAISelection && enhancement.selectedTemplateName) {
+                return {
+                    selectedTemplateName: enhancement.selectedTemplateName,
+                    matchConfidence: enhancement.matchConfidence || 0.8,
+                    reasoning: `AI-enhanced: ${enhancement.reasoning}`,
+                    alternatives: keywordSelection.alternativeTemplates || [],
+                    customizations: keywordSelection.customizationsNeeded || [],
+                    usage: result.usage,
+                    metadata: {
+                        model: 'ai-enhanced-keyword',
+                        timestamp: new Date().toISOString(),
+                        requestId: this.generateRequestId(),
+                        enhancement: enhancement.enhancement
+                    }
+                };
             }
-        };
+
+            return null; // Use keyword selection
+
+        } catch (error) {
+            // AI enhancement failed, but that's okay
+            return null;
+        }
     }
 
     /**
@@ -532,6 +665,61 @@ class GeminiAIService {
         }
     }
 
+    async extractTextFromResponse(response) {
+        console.log('***** response  *****')
+        if (!response) {
+            return '';
+        }
+    
+        try {
+            // Handle cases where response is already parsed JSON from certain model configurations
+            if (response.candidates && response.candidates[0] && response.candidates[0].content && response.candidates[0].content.parts && response.candidates[0].content.parts[0].text) {
+                // When responseMimeType is 'application/json', the text is pre-parsed.
+                // We need to stringify it to maintain a consistent text-based output for downstream parsers.
+                const jsonText = response.candidates[0].content.parts[0].text;
+                if (typeof jsonText === 'object') {
+                    return JSON.stringify(jsonText);
+                }
+                return jsonText;
+            }
+    
+            // Standard text extraction for non-JSON or default responses
+            if (typeof response.text === 'function') {
+                const textResult = await response.text();
+                if (textResult) {
+                    return textResult;
+                }
+            }
+        } catch (error) {
+            this.logger.debug('Gemini response text() extraction failed', error);
+        }
+    
+        try {
+            if (Array.isArray(response.candidates)) {
+                const candidateText = response.candidates
+                    .map(candidate => {
+                        if (!candidate?.content?.parts) {
+                            return '';
+                        }
+                        return candidate.content.parts
+                            .map(part => part?.text || '')
+                            .join('');
+                    })
+                    .filter(Boolean)
+                    .join('\n')
+                    .trim();
+    
+                if (candidateText) {
+                    return candidateText;
+                }
+            }
+        } catch (error) {
+            this.logger.debug('Gemini candidate parts extraction failed', error);
+        }
+    
+        return '';
+    }
+
     /**
      * Generate unique request ID for tracking
      */
@@ -604,8 +792,21 @@ class GeminiAIService {
      */
     parseTemplateAnalysis(responseText) {
         try {
-            const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-            return jsonMatch ? JSON.parse(jsonMatch[0]) : {};
+            if (!responseText || typeof responseText !== 'string') {
+                this.logger.warn('Gemini template analysis returned empty response');
+                return {};
+            }
+
+            const sanitized = responseText.replace(/```json|```/gi, '').trim();
+            const jsonMatch = sanitized.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                this.logger.warn('Gemini template analysis did not include JSON', {
+                    preview: sanitized.slice(0, 200)
+                });
+                return {};
+            }
+
+            return JSON.parse(jsonMatch[0]);
         } catch (error) {
             this.logger.error('Failed to parse template analysis', error);
             return {};

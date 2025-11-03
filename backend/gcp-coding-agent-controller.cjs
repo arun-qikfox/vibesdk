@@ -61,7 +61,7 @@ const DEFAULT_MODEL_CONFIGS = {
         },
         smart: {
             key: 'smart',
-            name: 'google-ai-studio/gemini-1.5-flash',
+            name: 'google-ai-studio/gemini-2.5-flash',
             temperature: 0.4,
             max_tokens: 8192,
             reasoning_effort: 'medium'
@@ -194,7 +194,7 @@ class GCPCodingAgentController extends BaseController {
                 max_tokens: 4000,
                 temperature: 0.7,
                 reasoning_effort: 'medium',
-                fallbackModel: 'gemini-1.5-flash'
+                fallbackModel: 'gemini-2.5-flash'
             });
 
             const inferenceContext = {
@@ -1204,7 +1204,7 @@ createApp(App).mount('#app')`
      */
     static async selectTemplateWithFallbackAI(env, inferenceContext, query, templates, images, logger) {
         try {
-            logger.info('GCP: Selecting template using Cloudflare Gemini logic', {
+            logger.info('GCP: Selecting template using Gemini AI logic', {
                 query: query.substring(0, 100) + '...',
                 templateCount: templates.length
             });
