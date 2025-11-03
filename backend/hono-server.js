@@ -1,6 +1,7 @@
 const { serve } = require('@hono/node-server');
 const { Hono } = require('hono');
 const WebSocket = require('ws');
+const crypto = require('crypto');
 const http = require('http');
 const { setupGlobalEnvironment } = require('./setup-env');
 const { formatApiResponse, extractPathParams, extractQueryParams } = require('./api-client-router.js');
@@ -8,6 +9,126 @@ const { initializeMiddlewareAdapters } = require('./hono-middleware-adapters');
 const { setupHonoCompatibleRoutes } = require('./setup-hono-routes');
 // Lazy import agentStates to avoid timing issues
 let agentStates = null;
+let agentControllerModule = null;
+
+const isSocketOpen = (socket) => socket && socket.readyState === WebSocket.OPEN;
+
+const sendSocketMessage = (socket, payload) => {
+    if (!isSocketOpen(socket)) {
+        return;
+    }
+    try {
+        socket.send(JSON.stringify(payload));
+    } catch (error) {
+        console.error('Error sending WebSocket message', error);
+    }
+};
+
+const broadcastToAgentConnections = (agentState, payload) => {
+    if (!agentState || !agentState.websocketConnections) {
+        return;
+    }
+    for (const socket of agentState.websocketConnections) {
+        sendSocketMessage(socket, payload);
+    }
+};
+
+const buildConversationState = (agentState) => ({
+    runningHistory: Array.isArray(agentState?.conversationHistory) ? agentState.conversationHistory : []
+});
+
+const ensureAgentModelConfigs = (agentState) => {
+    if (!agentState) {
+        return {
+            agents: [],
+            userConfigs: {},
+            defaultConfigs: {}
+        };
+    }
+    if (!agentState.modelConfigs && agentControllerModule?.GCPCodingAgentController?.getDefaultModelConfigs) {
+        agentState.modelConfigs = agentControllerModule.GCPCodingAgentController.getDefaultModelConfigs();
+    }
+    return agentState.modelConfigs || {
+        agents: [],
+        userConfigs: {},
+        defaultConfigs: {}
+    };
+};
+
+const replayGenerationToSockets = (agentId, agentState) => {
+    if (!agentState) return;
+    const files = Array.isArray(agentState.files) ? agentState.files : [];
+    const totalFiles = files.length;
+
+    broadcastToAgentConnections(agentState, {
+        type: 'generation_started',
+        agentId,
+        totalFiles,
+        startedAt: agentState.generationStartedAt || Date.now()
+    });
+
+    broadcastToAgentConnections(agentState, {
+        type: 'phase_generating',
+        agentId,
+        message: 'Generating project files...'
+    });
+
+    files.forEach((file, index) => {
+        broadcastToAgentConnections(agentState, {
+            type: 'file_generating',
+            agentId,
+            filePath: file.filePath,
+            index: index + 1,
+            totalFiles
+        });
+
+        broadcastToAgentConnections(agentState, {
+            type: 'file_generated',
+            agentId,
+            file: {
+                filePath: file.filePath,
+                fileContents: file.fileContents
+            },
+            index: index + 1,
+            totalFiles
+        });
+    });
+
+    broadcastToAgentConnections(agentState, {
+        type: 'phase_generated',
+        agentId,
+        message: 'Project files generated'
+    });
+
+    broadcastToAgentConnections(agentState, {
+        type: 'generation_complete',
+        agentId,
+        status: agentState.status || 'completed',
+        completedAt: agentState.generationCompletedAt || Date.now()
+    });
+
+    agentState.generationReplaySent = true;
+};
+
+const appendConversationEntry = (agentState, entry) => {
+    if (!agentState) return;
+    if (!Array.isArray(agentState.conversationHistory)) {
+        agentState.conversationHistory = [];
+    }
+    agentState.conversationHistory.push(entry);
+};
+
+const createConversationId = () => crypto.randomUUID();
+
+const buildAssistantResponse = (agentState, userMessage) => {
+    const baseMessage = agentState?.templateDetails?.name
+        ? `The project has been generated using the ${agentState.templateDetails.name} template.`
+        : 'The project is ready.';
+    if (!userMessage) {
+        return `${baseMessage} Let me know if you need any updates or additions.`;
+    }
+    return `${baseMessage} I noted: "${userMessage}". Let me know how you would like me to adjust the project.`;
+};
 
 // Get the runtime configuration from env (similar to worker)
 const RUNTIME_PROVIDER = process.env.RUNTIME_PROVIDER || 'nodejs';
@@ -101,10 +222,12 @@ const app = new Hono();
                 const agentId = match[1];
                 console.log(`🔌 New WebSocket connection for agent: ${agentId}`);
 
-                // Lazy import agentStates to avoid timing issues
+                // Lazy import agent controller/state to avoid timing issues
+                if (!agentControllerModule) {
+                    agentControllerModule = require('./gcp-coding-agent-controller');
+                }
                 if (!agentStates) {
-                    const gcpController = require('./gcp-coding-agent-controller');
-                    agentStates = gcpController.agentStates;
+                    agentStates = agentControllerModule.agentStates;
                     console.log(`🔌 agentStates imported:`, typeof agentStates, agentStates ? 'defined' : 'undefined');
                 }
 
@@ -128,39 +251,106 @@ const app = new Hono();
                 ws.on('message', (data) => {
                     try {
                         const message = JSON.parse(data.toString());
-                        console.log(`📨 WebSocket message for agent ${agentId}:`, message.type);
+                        console.log(`?? WebSocket message for agent ${agentId}:`, message.type);
 
-                        // Handle different message types
                         switch (message.type) {
-                            case 'ping':
-                                ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                            case 'ping': {
+                                sendSocketMessage(ws, { type: 'pong', timestamp: Date.now() });
                                 break;
-                            case 'get_status':
-                                ws.send(JSON.stringify({
+                            }
+                            case 'get_status': {
+                                sendSocketMessage(ws, {
                                     type: 'status',
                                     agentId,
                                     status: agentState.status,
                                     files: agentState.files,
                                     progress: agentState.status === 'completed' ? 100 :
-                                            agentState.status === 'generating' ? 50 : 0
-                                }));
+                                        agentState.status === 'generating' ? 50 : 0,
+                                    startedAt: agentState.generationStartedAt || null,
+                                    completedAt: agentState.generationCompletedAt || null
+                                });
                                 break;
-                            default:
+                            }
+                            case 'generate_all': {
+                                replayGenerationToSockets(agentId, agentState);
+                                break;
+                            }
+                            case 'get_conversation_state': {
+                                sendSocketMessage(ws, {
+                                    type: 'conversation_state',
+                                    state: buildConversationState(agentState)
+                                });
+                                break;
+                            }
+                            case 'clear_conversation': {
+                                agentState.conversationHistory = [];
+                                broadcastToAgentConnections(agentState, { type: 'conversation_cleared' });
+                                broadcastToAgentConnections(agentState, {
+                                    type: 'conversation_state',
+                                    state: buildConversationState(agentState)
+                                });
+                                break;
+                            }
+                            case 'user_suggestion': {
+                                const userMessage = typeof message.message === "string"
+                                    ? message.message.trim()
+                                    : '';
+                                if (!userMessage) {
+                                    sendSocketMessage(ws, {
+                                        type: 'error',
+                                        message: 'No message provided for user_suggestion'
+                                    });
+                                    break;
+                                }
+
+                                const conversationId = message.conversationId || `conv-${createConversationId()}`;
+                                const timestamp = Date.now();
+
+                                appendConversationEntry(agentState, {
+                                    conversationId,
+                                    role: 'user',
+                                    content: [{ type: 'text', text: userMessage }],
+                                    timestamp
+                                });
+
+                                const assistantResponse = buildAssistantResponse(agentState, userMessage);
+                                appendConversationEntry(agentState, {
+                                    conversationId,
+                                    role: 'assistant',
+                                    content: [{ type: 'text', text: assistantResponse }],
+                                    timestamp: Date.now()
+                                });
+
+                                broadcastToAgentConnections(agentState, {
+                                    type: 'conversation_response',
+                                    conversationId,
+                                    message: assistantResponse
+                                });
+                                break;
+                            }
+                            case 'get_model_configs': {
+                                sendSocketMessage(ws, {
+                                    type: 'model_configs_info',
+                                    configs: ensureAgentModelConfigs(agentState)
+                                });
+                                break;
+                            }
+                            default: {
                                 console.log(`Unhandled message type: ${message.type}`);
-                                ws.send(JSON.stringify({
+                                sendSocketMessage(ws, {
                                     type: 'error',
                                     message: `Unknown message type: ${message.type}`
-                                }));
+                                });
+                            }
                         }
                     } catch (error) {
                         console.error(`Error handling WebSocket message for agent ${agentId}:`, error);
-                        ws.send(JSON.stringify({
+                        sendSocketMessage(ws, {
                             type: 'error',
                             message: 'Failed to process message'
-                        }));
+                        });
                     }
                 });
-
                 // Handle WebSocket close
                 ws.on('close', () => {
                     console.log(`🔌 WebSocket connection closed for agent: ${agentId}`);
@@ -176,14 +366,6 @@ const app = new Hono();
                         agentState.websocketConnections.delete(ws);
                     }
                 });
-
-                // Send initial connection confirmation
-                ws.send(JSON.stringify({
-                    type: 'connected',
-                    agentId,
-                    status: agentState.status,
-                    message: `Connected to agent ${agentId}`
-                }));
 
                 console.log(`✅ WebSocket connection established for agent: ${agentId}`);
 

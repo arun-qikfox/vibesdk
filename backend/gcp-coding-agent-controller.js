@@ -32,8 +32,43 @@ try {
 const WebSocket = require('ws');
 const { Storage } = require('@google-cloud/storage');
 const path = require('path');
+const crypto = require('crypto');
 // Simple ID generator function
 const generateId = () => crypto.randomUUID();
+
+const DEFAULT_MODEL_CONFIGS = {
+    agents: [
+        {
+            key: 'deterministic',
+            name: 'Deterministic Agent',
+            description: 'Balanced deterministic agent optimized for GCP execution'
+        },
+        {
+            key: 'smart',
+            name: 'Smart Agent',
+            description: 'Adaptive agent that prioritizes rapid iteration'
+        }
+    ],
+    userConfigs: {},
+    defaultConfigs: {
+        deterministic: {
+            key: 'deterministic',
+            name: 'google-ai-studio/gemini-1.5-pro',
+            temperature: 0.2,
+            max_tokens: 8192,
+            reasoning_effort: 'medium'
+        },
+        smart: {
+            key: 'smart',
+            name: 'google-ai-studio/gemini-1.5-flash',
+            temperature: 0.4,
+            max_tokens: 8192,
+            reasoning_effort: 'medium'
+        }
+    }
+};
+
+const cloneDefaultModelConfigs = () => JSON.parse(JSON.stringify(DEFAULT_MODEL_CONFIGS));
 
 // Agent state storage - uses PostgreSQL service when available, falls back to in-memory
 const activeAgents = new Map(); // agentId -> { websocket, state, files }
@@ -248,7 +283,12 @@ class GCPCodingAgentController extends BaseController {
                 files: templateDetails.files, // Use real cloud template files
                 websocketConnections: new Set(),
                 templateDetails,
-                sandboxSessionId
+                sandboxSessionId,
+                conversationHistory: [],
+                modelConfigs: GCPCodingAgentController.getDefaultModelConfigs(),
+                generationStartedAt: null,
+                generationCompletedAt: null,
+                generationReplaySent: false
             };
 
             await agentStates.set(agentId, agentState);
@@ -1156,6 +1196,13 @@ createApp(App).mount('#app')`
     }
 
     /**
+     * Provide default model configuration metadata for UI consumption
+     */
+    static getDefaultModelConfigs() {
+        return cloneDefaultModelConfigs();
+    }
+
+    /**
      * Upload image to GCS (equivalent of uploadImage in Cloudflare)
      */
     static async uploadImageToGCS(env, image) {
@@ -1209,6 +1256,11 @@ createApp(App).mount('#app')`
             const agentState = await agentStates.get(agentId);
             if (!agentState) return;
 
+            agentState.status = 'generating';
+            if (!agentState.generationStartedAt) {
+                agentState.generationStartedAt = Date.now();
+            }
+
             // Send files one at a time like Cloudflare
             const templateFiles = agentState.files || [];
 
@@ -1234,6 +1286,8 @@ createApp(App).mount('#app')`
             writer.close();
 
             agentState.status = 'completed';
+            agentState.generationCompletedAt = Date.now();
+            agentState.generationReplaySent = false;
             logger.info(`GCP: Agent ${agentId} completed successfully`);
 
         } catch (error) {
