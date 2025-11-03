@@ -10,10 +10,11 @@
     "db:migrate": "node -e \"const pg = require('pg'); const fs = require('fs'); const path = require('path'); require('dotenv').config({path: path.join(__dirname, '..', '.env')}); const client = new pg.Client(process.env.DATABASE_URL); console.log('Connecting to DB...'); client.connect().then(() => {console.log('Connected to database successfully'); const files = fs.readdirSync(path.join(__dirname, '..', 'migrations')).filter(f => f.endsWith('.sql')).sort(); return Promise.all(files.map(file => { const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', file), 'utf8'); console.log('Running: ' + file); return client.query(sql).then(() => console.log('✅ ' + file + ' completed')) })).then(() => client.end().then(() => console.log('🎉 All migrations complete!'))) }).catch(e => { console.error('Migration error:', e.message); client.end(); process.exit(1) })\""
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.17.2",
+    "@google/generative-ai": "^0.17.0",
     "@hono/node-server": "^1.19.5",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^4.19.0",
     "hono": "^4.10.3",
     "jsonwebtoken": "^9.0.2",
     "node-fetch": "^3.3.2",

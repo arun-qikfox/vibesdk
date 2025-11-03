@@ -209,16 +209,115 @@ function getAuthController(env) {
     return authController;
 }
 
-// Try to load actual CodingAgentController from Worker
+// Use GCP-native Node.js CodingAgentController
 let CodingAgentController = null;
 try {
-  // This will fail in production because it's TypeScript, but might work with compilation
-  CodingAgentController = require('../worker/api/controllers/agent/controller.js').CodingAgentController;
+  console.log('🔄 Loading GCP-native CodingAgentController for Node.js...');
+  const { GCPCodingAgentController } = require('./gcp-coding-agent-controller.js');
+  CodingAgentController = GCPCodingAgentController;
+  console.log('✅ Successfully loaded GCP-native CodingAgentController');
 } catch (error) {
-  console.warn('⚠️  Could not load real CodingAgentController, using stub');
-  // Stub implementation for development
+  console.warn('⚠️  Could not load GCP-native CodingAgentController:', error.message);
+  // Final fallback to stub implementation
   CodingAgentController = class StubCodingAgentController {
     static async startCodeGeneration(request, env, ctx, context) {
+      // Return streaming Response like real Cloudflare Workers
+      // Client expects Response object with websocketUrl in the stream data
+
+      const agentId = 'agent-' + Date.now();
+
+      const streamData = {
+        message: 'Code generation started',
+        agentId: agentId,
+        websocketUrl: `ws://localhost:3001/api/agent/${agentId}/ws`,
+        httpStatusUrl: `http://localhost:3001/api/agent/${agentId}`,
+        template: {
+          name: 'Basic React App',
+          files: [
+            {
+              fileName: 'src/App.js',
+              fileContents: `import React from 'react';
+import './App.css';
+
+function App() {
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Generated React App</h1>
+        <p>This app was generated using VibesDK with AI assistance!</p>
+      </header>
+    </div>
+  );
+}
+
+export default App;`
+            },
+            {
+              fileName: 'src/App.css',
+              fileContents: `.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}`
+            },
+            {
+              fileName: 'public/index.html',
+              fileContents: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>React App</title>
+</head>
+<body>
+  <noscript>You need to enable JavaScript to run this app.</noscript>
+  <div id="root"></div>
+</body>
+</html>`
+            }
+          ]
+        }
+      };
+
+      // Create a simple readable stream that provides the data
+      const stream = new ReadableStream({
+        start(controller) {
+          // Send the initialization data as NDJSON
+          const data = JSON.stringify(streamData) + '\n';
+          controller.enqueue(new TextEncoder().encode(data));
+
+          // Send termination signal
+          controller.enqueue(new TextEncoder().encode(JSON.stringify({type: 'terminate'}) + '\n'));
+          controller.close();
+        }
+      });
+
+      return new Response(stream, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain', // Plain text stream like real Workers
+          'Cache-Control': 'no-cache, no-store, must-revalidate, no-transform',
+          'Pragma': 'no-cache',
+          'Connection': 'keep-alive'
+        }
+      });
+
+      /* Original NDJSON streaming code (commented out to avoid server crashes):
       // Create NDJSON stream response similar to what the real controller would do
       const { readable, writable } = new TransformStream({
         transform(chunk, controller) {
@@ -259,6 +358,7 @@ try {
           'Connection': 'keep-alive'
         }
       });
+      */
     }
 
     static async connectToExistingAgent(request, env, ctx, context) {

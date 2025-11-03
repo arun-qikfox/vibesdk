@@ -911,6 +911,293 @@ export const rateLimitBuckets = pgTable(
 );
 
 // ========================================
+// STRATEGY B: AGENT STATE MANAGEMENT
+// ========================================
+
+/**
+ * Agent Sessions (Durable Object equivalent)
+ * Stores session information and state for long-running agent executions
+ */
+export const agentSessions = pgTable(
+	'agent_sessions',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id')
+			.references(() => users.id, { onDelete: 'cascade' }),
+		appId: text('app_id')
+			.references(() => apps.id, { onDelete: 'cascade' }),
+
+		// Session state
+		status: text('status')
+			.$type<'initialized' | 'blueprint_generated' | 'executing' | 'reviewing' | 'completed' | 'failed'>()
+			.notNull()
+			.default('initialized'),
+
+		// Execution data (blueprints, current state)
+		blueprint: jsonb('blueprint')
+			.$type<Record<string, unknown>>(),
+		phases: jsonb('phases')
+			.$type<Array<Record<string, unknown>>>()
+			.default(sql`'[]'::jsonb`),
+		executionData: jsonb('execution_data')
+			.$type<Record<string, unknown>>()
+			.default(sql`'{}'::jsonb`),
+		state: jsonb('state')
+			.$type<Record<string, unknown>>(),
+
+		// Timing
+		createdAt: timestamp('created_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+		startedAt: timestamp('started_at', { withTimezone: true }),
+		completedAt: timestamp('completed_at', { withTimezone: true }),
+		abortedAt: timestamp('aborted_at', { withTimezone: true }),
+
+		// Error handling
+		errorMessage: text('error_message'),
+		errorDetails: jsonb('error_details')
+			.$type<Record<string, unknown>>(),
+
+		// Resource tracking
+		gcpAiTokensUsed: integer('gcp_ai_tokens_used').default(0),
+		gcpStorageOperations: integer('gcp_storage_operations').default(0),
+		executionTimeSeconds: integer('execution_time_seconds').default(0),
+	},
+	(table) => ({
+		userIdIdx: index('idx_agent_sessions_user_id').on(table.userId),
+		appIdIdx: index('idx_agent_sessions_app_id').on(table.appId),
+		statusIdx: index('idx_agent_sessions_status').on(table.status),
+		createdAtIdx: index('idx_agent_sessions_created_at').on(table.createdAt),
+		updatedAtIdx: index('idx_agent_sessions_updated_at').on(table.updatedAt),
+	}),
+);
+
+/**
+ * Agent Phases (Execution Steps)
+ * Tracks individual phases within an agent session
+ */
+export const agentPhases = pgTable(
+	'agent_phases',
+	{
+		id: text('id').primaryKey(),
+		sessionId: text('session_id')
+			.notNull()
+			.references(() => agentSessions.id, { onDelete: 'cascade' }),
+
+		// Phase identification
+		phaseName: text('phase_name').notNull(),
+		phaseType: text('phase_type')
+			.$type<'blueprint' | 'analysis' | 'code_generation' | 'integration' | 'review' | 'deployment' | 'completion'>()
+			.notNull(),
+		phaseKey: text('phase_key'), // Unique key within session
+
+		// Status and execution
+		status: text('status')
+			.$type<'pending' | 'running' | 'completed' | 'failed' | 'skipped'>()
+			.notNull()
+			.default('pending'),
+		priority: integer('priority').default(1),
+
+		// Data flow
+		config: jsonb('config')
+			.$type<Record<string, unknown>>()
+			.default(sql`'{}'::jsonb`),
+		inputData: jsonb('input_data')
+			.$type<Record<string, unknown>>(),
+		result: jsonb('result')
+			.$type<Record<string, unknown>>(),
+		outputFiles: jsonb('output_files')
+			.$type<Array<Record<string, unknown>>>()
+			.default(sql`'[]'::jsonb`),
+
+		// Error handling
+		errorMessage: text('error_message'),
+		errorDetails: jsonb('error_details')
+			.$type<Record<string, unknown>>(),
+		retryCount: integer('retry_count').default(0),
+
+		// Timing
+		createdAt: timestamp('created_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+		queuedAt: timestamp('queued_at', { withTimezone: true }),
+		startedAt: timestamp('started_at', { withTimezone: true }),
+		completedAt: timestamp('completed_at', { withTimezone: true }),
+
+		// Dependencies (simplified as JSON array)
+		dependsOn: jsonb('depends_on')
+			.$type<Array<string>>()
+			.default(sql`'[]'::jsonb`),
+
+		// Resource usage tracking
+		phaseTokensUsed: integer('phase_tokens_used').default(0),
+		phaseExecutionTimeSeconds: integer('phase_execution_time_seconds').default(0),
+	},
+	(table) => ({
+		sessionIdIdx: index('idx_agent_phases_session_id').on(table.sessionId),
+		statusIdx: index('idx_agent_phases_status').on(table.status),
+		typeIdx: index('idx_agent_phases_type').on(table.phaseType),
+		priorityIdx: index('idx_agent_phases_priority').on(table.priority),
+		createdAtIdx: index('idx_agent_phases_created_at').on(table.createdAt),
+	}),
+);
+
+/**
+ * Template Assets Cache
+ * Caches template files for faster agent execution
+ */
+export const templateAssets = pgTable(
+	'template_assets',
+	{
+		id: text('id').primaryKey().default(sql`gen_random_uuid()::text`),
+		templateName: text('template_name').notNull(),
+		assetPath: text('asset_path').notNull(),
+
+		// Content and caching
+		contentHash: text('content_hash').notNull(),
+		cachedContent: text('cached_content'),
+		isLargeFile: boolean('is_large_file').default(false),
+
+		// Metadata
+		fileSizeBytes: integer('file_size_bytes'),
+		mimeType: text('mime_type'),
+		lastAccessed: timestamp('last_accessed', { withTimezone: true }),
+		createdAt: timestamp('created_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+		updatedAt: timestamp('updated_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+
+		// GCS integration
+		gcsBucket: text('gcs_bucket'),
+		gcsPath: text('gcs_path'),
+
+		// Usage tracking
+		accessCount: integer('access_count').default(0),
+		lastUsedInSession: text('last_used_in_session').references(() => agentSessions.id, {
+			onDelete: 'set null',
+		}),
+	},
+	(table) => ({
+		templateIdx: index('idx_template_assets_template_name').on(table.templateName),
+		hashIdx: index('idx_template_assets_content_hash').on(table.contentHash),
+		accessedIdx: index('idx_template_assets_last_accessed').on(table.lastAccessed),
+		countIdx: index('idx_template_assets_access_count').on(table.accessCount),
+		templatePathIdx: uniqueIndex('template_assets_template_path_idx').on(
+			table.templateName,
+			table.assetPath,
+		),
+	}),
+);
+
+/**
+ * Agent Execution Logs
+ * Detailed logging for debugging and monitoring
+ */
+export const agentExecutionLogs = pgTable(
+	'agent_execution_logs',
+	{
+		id: bigint('id', { mode: 'number' }).primaryKey().default(sql`gen_random_uuid()::text`),
+		sessionId: text('session_id')
+			.references(() => agentSessions.id, { onDelete: 'cascade' }),
+		phaseId: text('phase_id')
+			.references(() => agentPhases.id, { onDelete: 'cascade' }),
+
+		// Log details
+		level: text('level')
+			.$type<'debug' | 'info' | 'warn' | 'error'>()
+			.notNull()
+			.default('info'),
+		message: text('message').notNull(),
+		details: jsonb('details')
+			.$type<Record<string, unknown>>()
+			.default(sql`'{}'::jsonb`),
+
+		// Context
+		component: text('component'),
+		operation: text('operation'),
+		correlationId: text('correlation_id'),
+
+		// Performance
+		durationMs: integer('duration_ms'),
+		memoryUsageMb: integer('memory_usage_mb'),
+		gcpOperationsCount: integer('gcp_operations_count').default(0),
+
+		// Timing
+		timestamp: timestamp('timestamp', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+	},
+	(table) => ({
+		sessionIdx: index('idx_execution_logs_session_id').on(table.sessionId),
+		phaseIdx: index('idx_execution_logs_phase_id').on(table.phaseId),
+		levelIdx: index('idx_execution_logs_level').on(table.level),
+		timestampIdx: index('idx_execution_logs_timestamp').on(table.timestamp),
+		componentIdx: index('idx_execution_logs_component').on(table.component),
+	}),
+);
+
+/**
+ * WebSocket Connections
+ * Tracks real-time WebSocket connections for agent sessions
+ */
+export const websocketConnections = pgTable(
+	'websocket_connections',
+	{
+		id: text('id').primaryKey().default(sql`gen_random_uuid()::text`),
+		sessionId: text('session_id')
+			.references(() => agentSessions.id, { onDelete: 'cascade' }),
+		userId: text('user_id')
+			.references(() => users.id, { onDelete: 'cascade' }),
+
+		// Connection details
+		connectionId: text('connection_id').unique().notNull(),
+		clientIp: text('client_ip'),
+		userAgent: text('user_agent'),
+		protocolVersion: text('protocol_version').default('1.0'),
+
+		// Status
+		status: text('status')
+			.$type<'connected' | 'disconnected' | 'error' | 'closed'>()
+			.notNull()
+			.default('connected'),
+		connectedAt: timestamp('connected_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+		disconnectedAt: timestamp('disconnected_at', { withTimezone: true }),
+		lastPing: timestamp('last_ping', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP`,
+		),
+
+		// Performance tracking
+		messagesSent: integer('messages_sent').default(0),
+		messagesReceived: integer('messages_received').default(0),
+		bytesSent: integer('bytes_sent').default(0),
+		bytesReceived: integer('bytes_received').default(0),
+
+		// Error tracking
+		errorCount: integer('error_count').default(0),
+		lastError: text('last_error'),
+
+		// Cleanup (computed column equivalent)
+		expiresAt: timestamp('expires_at', { withTimezone: true }).default(
+			sql`CURRENT_TIMESTAMP + INTERVAL '24 hours'`,
+		),
+	},
+	(table) => ({
+		sessionIdx: index('idx_websocket_connections_session_id').on(table.sessionId),
+		userIdx: index('idx_websocket_connections_user_id').on(table.userId),
+		statusIdx: index('idx_websocket_connections_status').on(table.status),
+		expiresIdx: index('idx_websocket_connections_expires_at').on(table.expiresAt),
+		connectionIdIdx: uniqueIndex('idx_websocket_connections_connection_id').on(table.connectionId),
+	}),
+);
+
+// ========================================
 // TYPE EXPORTS FOR APPLICATION USE
 // ========================================
 

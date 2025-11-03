@@ -62,6 +62,15 @@ export {
 	appDeployments,
 };
 
+// Agent state management tables (Strategy B) - only available in GCP
+// These are exported conditionally to avoid type errors in non-GCP environments
+const gcpSchema = postgresSchema;
+export const agentSessions = gcpSchema.agentSessions;
+export const agentPhases = gcpSchema.agentPhases;
+export const templateAssets = gcpSchema.templateAssets;
+export const agentExecutionLogs = gcpSchema.agentExecutionLogs;
+export const websocketConnections = gcpSchema.websocketConnections;
+
 export type DatabaseSchema = typeof schema;
 
 export type {

@@ -83,6 +83,12 @@ export default defineConfig({
 				target: 'http://localhost:3001',
 				changeOrigin: true,
 				secure: false,
+				// Add stability options to prevent ECONNRESET
+				timeout: 30000,
+				proxyTimeout: 30000,
+				headers: {
+					'Connection': 'keep-alive'
+				}
 			},
 		},
 	},

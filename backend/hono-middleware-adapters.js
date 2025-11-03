@@ -197,17 +197,48 @@ function initializeMiddlewareAdapters(globalEnv) {
                         queryParams: new URL(c.req.url).searchParams,
                     };
 
+                    // Parse the JSON body first (required for Hono)
+                    let parsedBody;
+                    try {
+                        parsedBody = await c.req.json();
+                    } catch (e) {
+                        parsedBody = {};
+                    }
+
+                    // Convert Node.js request to Fetch-like interface for controllers
+                    const mockFetchRequest = {
+                        url: `${c.req.protocol}://${c.req.hostname}${c.req.path}${c.req.querystring ? '?' + c.req.querystring : ''}`,
+                        headers: {
+                            get: (name) => c.req.header(name) || null
+                        },
+                        json: () => Promise.resolve(parsedBody),  // Use parsed body
+                        text: () => Promise.resolve(JSON.stringify(parsedBody)),
+                        method: c.req.method,
+                    };
+
                     // Call controller method like worker does
                     const result = await controllerMethod.call(
                         controllerClass,
-                        c.req.raw,           // Request object
+                        mockFetchRequest,    // Fetch-like request object
                         globalEnv,           // Environment
                         {},                  // Execution context (mock for Node.js)
                         routeContext         // Route context with user/session
                     );
 
-                    // Return the Response from controller (worker format)
-                    return result;
+                    // Handle different controller response types
+                    if (result instanceof Response) {
+                        // Auth controllers return Response objects directly
+                        return result;
+                    } else {
+                        // App controllers return ControllerResponse objects
+                        if (result.success) {
+                            const statusCode = result.statusCode || 200;
+                            return c.json(formatApiResponse(result.data, result.success), statusCode);
+                        } else {
+                            const statusCode = result.statusCode || 500;
+                            return c.json(formatApiResponse(result.error || 'Controller error', false), statusCode);
+                        }
+                    }
 
                 } catch (error) {
                     console.error('Controller execution error:', error);

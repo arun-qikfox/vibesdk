@@ -4,6 +4,21 @@
 // Use actual Worker controllers loaded by service adapter
 const { getAuthController, CodingAgentController } = require('./worker-service-adapter');
 
+// Import the real AppController for app-specific routes
+let AppController;
+try {
+    const { AppController: RealAppController } = require('../worker/api/controllers/apps/controller.js');
+    AppController = RealAppController;
+} catch (error) {
+    console.warn('⚠️ Could not load real AppController, using stub');
+    AppController = {
+        getFavoriteApps: async (request, env, ctx, context) => ({
+            success: true,
+            data: { apps: [] }
+        })
+    };
+}
+
 // Simple logger
 const createLogger = (name) => ({
     info: (msg) => console.log(`[${name}] ${msg}`),
@@ -151,6 +166,12 @@ async function setupHonoCompatibleRoutes(app, honoAdapters) {
             }]));
         });
 
+        // Use real AppController - get user's favorite apps
+        app.get('/api/apps/favorites',
+            honoAdapters.authenticate,
+            honoAdapters.adaptController(AppController, AppController.getFavoriteApps)
+        );
+
         app.post('/api/apps', honoAdapters.authenticate, (c) => {
             const user = c.get('user');
             return c.json(require('./api-client-router').formatApiResponse({
@@ -158,6 +179,16 @@ async function setupHonoCompatibleRoutes(app, honoAdapters) {
                 title: 'New App',
                 status: 'generating'
             }));
+        });
+
+        app.get('/api/apps/recent', honoAdapters.authenticate, (c) => {
+            const user = c.get('user');
+            return c.json(require('./api-client-router').formatApiResponse([{
+                id: 'recent-app-123',
+                title: 'Recent App',
+                status: 'completed',
+                createdAt: new Date().toISOString()
+            }]));
         });
 
         app.get('/api/user/apps', honoAdapters.authenticate, (c) => {
@@ -179,6 +210,38 @@ async function setupHonoCompatibleRoutes(app, honoAdapters) {
             honoAdapters.adaptController(CodingAgentController, CodingAgentController.connectToExistingAgent)
         );
 
+        // Stub route for individual app details - not available in Node.js (Durable Objects)
+        app.get('/api/apps/:appId', honoAdapters.authenticate, (c) => {
+            const appId = c.req.param('appId');
+            const user = c.get('user');
+            console.log(`📄 Stub route: GET /api/apps/${appId} for user ${user?.id || 'unknown'}`);
+
+            return c.json(require('./api-client-router').formatApiResponse({
+                id: appId,
+                title: 'Generated App',
+                status: 'completed',
+                description: 'This app was generated using VibesDK',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                userId: user?.id,
+                files: []
+            }));
+        });
+
+        // WebSocket routes are handled at the HTTP server level, not through Hono
+        // The wss WebSocket.Server handles /api/agent/:agentId/ws upgrade requests
+
+        // Stub route for agent deployment preview - not available in Node.js
+        app.get('/api/agent/:agentId/preview', honoAdapters.authenticate, (c) => {
+            const agentId = c.req.param('agentId');
+            console.log(`🚀 Stub route: GET /api/agent/${agentId}/preview`);
+            return c.json(require('./api-client-router').formatApiResponse({
+                previewURL: `http://localhost:5173/preview/${agentId}`,
+                agentId: agentId,
+                status: 'preview_not_available_in_nodejs'
+            }));
+        });
+
         app.get('/api/model-configs', honoAdapters.authenticate, (c) => {
             return c.json(require('./api-client-router').formatApiResponse([{
                 actionKey: 'generate_app',
@@ -188,7 +251,7 @@ async function setupHonoCompatibleRoutes(app, honoAdapters) {
             }]));
         });
 
-        console.log('✅ All routes configured');
+        console.log('✅ All routes configured (including Cloudflare replacements)');
         logger.info('Hono routes setup complete');
 
     } catch (error) {
