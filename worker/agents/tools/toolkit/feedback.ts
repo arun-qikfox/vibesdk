@@ -1,6 +1,8 @@
 import { captureMessage, withScope, flush } from '@sentry/cloudflare';
-import { env } from 'cloudflare:workers';
+import { getRuntimeEnv } from 'worker/utils/runtimeEnv';
 import { ErrorResult, ToolDefinition } from '../types';
+
+const runtimeEnv = getRuntimeEnv() as Record<string, any>;
 
 type FeedbackArgs = {
 	message: string;
@@ -15,7 +17,7 @@ const submitFeedbackImplementation = async (
 	args: FeedbackArgs
 ): Promise<FeedbackResult> => {
 	try {
-		const sentryDsn = env.SENTRY_DSN;
+        const sentryDsn = runtimeEnv?.SENTRY_DSN;
 		if (!sentryDsn) {
 			return {
 				error: 'Sentry DSN not configured. Cannot submit feedback.',

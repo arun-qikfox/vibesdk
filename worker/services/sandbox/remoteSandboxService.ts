@@ -33,9 +33,11 @@ import {
     GitHubPushResponseSchema,
 } from './sandboxTypes';
 import { BaseSandboxService } from "./BaseSandboxService";
-import { env } from 'cloudflare:workers'
+import { getRuntimeEnv } from 'worker/utils/runtimeEnv'
 import z from 'zod';
 import { FileOutputType } from 'worker/agents/schemas';
+
+const runtimeEnv = getRuntimeEnv() as Record<string, any>;
 
 export async function runnerFetch(url: string, method: 'GET' | 'POST' | 'DELETE', headers: Headers, body: string | undefined) {
     // Use direct fetch for runner service communication
@@ -247,4 +249,4 @@ export class RemoteSandboxServiceClient extends BaseSandboxService{
     }
 }
 
-RemoteSandboxServiceClient.init(env.SANDBOX_SERVICE_URL, env.SANDBOX_SERVICE_API_KEY);
+RemoteSandboxServiceClient.init(runtimeEnv?.SANDBOX_SERVICE_URL as string, runtimeEnv?.SANDBOX_SERVICE_API_KEY as string);

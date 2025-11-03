@@ -9,8 +9,9 @@ import { generateSecureToken } from '../../utils/cryptoUtils';
 import { parseCookies, createSecureCookie } from '../../utils/authUtils';
 import { getCSRFConfig } from '../../config/security';
 import { captureSecurityEvent } from '../../observability/sentry';
-import { env } from 'cloudflare:workers'
+import { getRuntimeEnv } from 'worker/utils/runtimeEnv';
 
+const runtimeEnv = getRuntimeEnv() as Record<string, any>;
 const logger = createLogger('CsrfService');
 
 interface CSRFTokenData {
@@ -21,7 +22,7 @@ interface CSRFTokenData {
 export class CsrfService {
     static readonly COOKIE_NAME = 'csrf-token';
     static readonly HEADER_NAME = 'X-CSRF-Token';
-    static readonly defaults = getCSRFConfig(env)
+    static readonly defaults = getCSRFConfig(runtimeEnv)
     
     /**
      * Generate a cryptographically secure CSRF token

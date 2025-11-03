@@ -1,4 +1,6 @@
-import { DurableObject } from 'cloudflare:workers';
+let DurableObjectBase: any = (globalThis as any)?.DurableObject ?? class {
+    constructor(..._args: any[]) {}
+};
 
 export interface RateLimitBucket {
     count: number;
@@ -30,7 +32,7 @@ export interface RateLimitResult {
  * Provides distributed rate limiting using bucketed sliding window algorithm
  * similar to the KV implementation but with better scalability, consistency and cost-effectiveness
  */
-export class DORateLimitStore extends DurableObject<Env> {
+export class DORateLimitStore extends (DurableObjectBase as { new (...args: any[]): any }) {
     private state: RateLimitState = {
         buckets: new Map(),
         lastCleanup: Date.now()

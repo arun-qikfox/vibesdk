@@ -31,7 +31,10 @@ global.env = {
   GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
   GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
   ALLOWED_EMAIL: process.env.ALLOWED_EMAIL,
-  NODE_ENV: process.env.NODE_ENV || 'development'
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  // Gemini AI configuration
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  GOOGLE_AI_API_KEY: process.env.GOOGLE_AI_API_KEY
 };
 
 // Placeholder for services (will be set by setup-env.js)

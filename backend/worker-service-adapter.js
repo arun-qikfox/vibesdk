@@ -213,7 +213,7 @@ function getAuthController(env) {
 let CodingAgentController = null;
 try {
   console.log('🔄 Loading GCP-native CodingAgentController for Node.js...');
-  const { GCPCodingAgentController } = require('./gcp-coding-agent-controller.js');
+  const { GCPCodingAgentController } = require('./gcp-coding-agent-controller.cjs');
   CodingAgentController = GCPCodingAgentController;
   console.log('✅ Successfully loaded GCP-native CodingAgentController');
 } catch (error) {

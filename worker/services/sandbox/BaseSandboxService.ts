@@ -32,9 +32,10 @@ import {
   } from './sandboxTypes';
   
   import { createObjectLogger, StructuredLogger } from '../../logger';
-  import { env } from 'cloudflare:workers'
+import { getRuntimeEnv } from 'worker/utils/runtimeEnv';
 import { FileOutputType } from 'worker/agents/schemas';
 import { createObjectStore } from 'shared/platform/storage';
+const runtimeEnv = getRuntimeEnv() as Record<string, unknown>;
   /**
    * Streaming event for enhanced command execution
    */
@@ -82,7 +83,7 @@ import { createObjectStore } from 'shared/platform/storage';
      */
     static async listTemplates(): Promise<TemplateListResponse> {
         try {
-            const store = createObjectStore(env as unknown as Record<string, unknown>);
+            const store = createObjectStore(runtimeEnv);
             const response = await store.get('template_catalog.json');
             if (response === null) {
                 throw new Error(`Failed to fetch template catalog: Template catalog not found`);

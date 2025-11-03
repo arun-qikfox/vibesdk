@@ -25,22 +25,36 @@ Use this rule file to coordinate the Google Cloud migration. An LLM or human ope
 
 **Strategy B** implements a complete agent intelligence system that eliminates Express entirely and runs the same Cloudflare-like flow but backed by Hono HTTP + WebSocket server and PostgreSQL for agent state management.
 
+### 🚨 CRITICAL ISSUES - IMMEDIATE ATTENTION REQUIRED
+
+**Current Status:** 81% Complete (13/16 components) - **BLOCKED BY 3 CRITICAL ISSUES**
+
+**Blocking Issues (Must Fix First):**
+1. **ESM Import Error** - `backend/gcp-agent-manager.js` TypeScript imports causing 'cloudflare:' protocol error
+2. **Gemini AI Template Selection** - Not implemented, causing random template selection
+3. **GCS Template Structure** - Templates missing application code files (only prompts exist)
+
+**📋 Complete Status:** See `migration-gcp-plan/strategy-b-implementation-status.md` for detailed analysis
+
 ### Strategy B Progress Tracker
 
 | Phase | Component | Summary | Status | Owner | Last Update | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1 | **Infrastructure Consolidation** | Eliminate Express server entirely, create agent schema, implement agent service | in-progress | Claude | 2025-01-31 | Agent schema created (0001_agent_state_management.sql), AgentStateService implemented. Next: Express elimination. |
+| 1 | **Infrastructure Consolidation** | Eliminate Express server entirely, create agent schema, implement agent service | done | Claude | 2025-11-03 | Hono server running, PostgreSQL agent state management complete |
 | 1.1 | Express Elimination | Remove Express server, migrate all routes to Hono, update package.json & startup | done | Claude | 2025-01-31 | Express dependency removed from backend/package.json, server renamed to express-server-legacy.js, scripts already pointed to hono-server.js |
 | 1.2 | Agent Schema Integration | Add agent tables to schema.gcp.ts and update exports | done | Claude | 2025-01-31 | Agent sessions, phases, assets, logs, and WebSocket tables added to PostgreSQL schema |
-| 2 | **Core Agent Intelligence** | Blueprint generation, phase execution engine, Gemini AI integration | pending | - | - | Replace Cloudflare gateway with direct Gemini (Pro + Flash) |
-| 2.1 | Blueprint Generator | Create agent intelligence for template selection and execution planning | pending | - | - | Replace getTemplateForQuery with Gemini analysis |
+| 1.3 | WebSocket Agent States | Fix import timing issues for WebSocket connections | done | Claude | 2025-11-03 | Lazy import pattern implemented to resolve singleton initialization timing |
+| 2 | **Core Agent Intelligence** | Blueprint generation, phase execution engine, Gemini AI integration | blocked | - | - | **BLOCKED: Gemini AI template selection not implemented** |
+| 2.1 | Blueprint Generator | Create agent intelligence for template selection and execution planning | blocked | - | - | **BLOCKED: Template selection falls back to random selection** |
 | 2.2 | Phase Executor | Implement phase-based code generation engine | pending | - | - | Support blueprint → code generation → review cycles |
 | 2.3 | Gemini AI Service | Direct GCP AI integration (no Cloudflare dependency) | done | Claude | 2025-01-31 | backend/gemini-ai-service.js implemented with Pro/Flash models, structured prompts, and direct GCP integration |
+| 2.4 | ESM Import Fix | Replace TypeScript imports with compiled JavaScript in agent manager | blocked | - | - | **CRITICAL: 'cloudflare:' protocol error preventing agent execution** |
 | 3 | **Enhanced Features** | Real-time WebSocket updates, review cycles, Cloud Run deployment | pending | - | - | Business logic enhancements |
-| 3.1 | WebSocket Real-time | Extend hono-server.js with enhanced agent progress streaming | pending | - | - | Live phase updates, file notifications |
+| 3.1 | WebSocket Real-time | Extend hono-server.js with enhanced agent progress streaming | done | Claude | 2025-11-03 | WebSocket server ready, agent state management integrated |
 | 3.2 | Review Engine | Automated code quality analysis and auto-fixes | pending | - | - | worker/agents/review-engine.ts |
 | 3.3 | Cloud Run Deploy | Integrate sandbox deployment to GCP Cloud Run | pending | - | - | backend/cloud-run-deployer.js |
 | 4 | **Quality Assurance** | Error handling, logging, performance, and testing | pending | - | - | End-to-end validation phase |
+| 5 | **GCS Template Population** | Upload complete template directories with application code to vibesdk-templates bucket | blocked | - | - | **EXTERNAL: GCS bucket only contains prompt files, missing src/, package.json, etc.** |
 
 ### Strategy B Technical Foundation (Completed)
 

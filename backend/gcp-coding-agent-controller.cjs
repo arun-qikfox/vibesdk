@@ -1199,32 +1199,38 @@ createApp(App).mount('#app')`
     }
 
     /**
-     * Template selection with optional Gemini AI fallback
-     * Uses existing logic first, falls back to Gemini analysis if configured
+     * Template selection using Cloudflare's proven Gemini AI logic
+     * Reuses exact same prompts, schemas, and intelligence as Cloudflare
      */
-    static selectTemplateWithFallbackAI(env, inferenceContext, query, templates, images, logger) {
+    static async selectTemplateWithFallbackAI(env, inferenceContext, query, templates, images, logger) {
         try {
-            logger.info('GCP: Selecting template for query', { query: query.substring(0, 100) + '...' });
+            logger.info('GCP: Selecting template using Cloudflare Gemini logic', {
+                query: query.substring(0, 100) + '...',
+                templateCount: templates.length
+            });
 
-            // First try simple keyword matching (existing behavior)
-            const simpleSelection = GCPCodingAgentController.selectTemplateByKeywords(query, templates, logger);
-            if (simpleSelection) {
-                logger.info('GCP: Template selected by keywords', { selected: simpleSelection.selectedTemplateName });
-                return simpleSelection;
-            }
+            // Import the GCP template selector that reuses Cloudflare logic
+            const { selectTemplateGCP } = require('./template-selector.gcp');
 
-            // As fallback, try Gemini AI if available and configured
-            if (geminiAIService && env.GEMINI_API_KEY) {
-                try {
-                    logger.info('GCP: Attempting Gemini AI analysis for template selection');
+            // Call the GCP template selector with same interface as Cloudflare
+            const selection = await selectTemplateGCP({
+                env,
+                query,
+                availableTemplates: templates,
+                inferenceContext,
+                images
+            });
 
-                    // This would be called asynchronously in a real implementation
-                    // For now, return a basic fallback
-                    logger.info('GCP: Gemini AI not implemented for template selection, using fallback');
-                } catch (geminiError) {
-                    logger.warn('GCP: Gemini AI template analysis failed, continuing', geminiError);
-                }
-            }
+            logger.info('GCP: Template selection completed', {
+                selectedTemplate: selection.selectedTemplateName,
+                matchConfidence: selection.matchConfidence,
+                reasoning: selection.reasoning?.substring(0, 100) + '...'
+            });
+
+            return selection;
+
+        } catch (error) {
+            logger.error('GCP: Template selection failed, using fallback', error);
 
             // Final fallback: select first available template
             if (templates.length > 0) {
@@ -1236,17 +1242,13 @@ createApp(App).mount('#app')`
                 return {
                     selectedTemplateName: fallbackTemplate.name,
                     matchConfidence: 0.3,
-                    reasoning: 'Fallback selection from available templates',
+                    reasoning: 'Fallback selection after AI selection failed',
                     alternativeTemplates: templates.slice(1, 3).map(t => t.name),
                     customizationsNeeded: ['May need adjustments based on specific requirements']
                 };
             }
 
             throw new Error('No templates available for selection');
-
-        } catch (error) {
-            logger.error('GCP: Template selection failed', error);
-            throw error;
         }
     }
 

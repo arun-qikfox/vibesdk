@@ -31,7 +31,7 @@ import {
 } from './sandboxTypes';
 
 import { createObjectLogger } from '../../logger';
-import { env } from 'cloudflare:workers'
+import { getRuntimeEnv } from 'worker/utils/runtimeEnv';
 import { BaseSandboxService } from './BaseSandboxService';
 
 import { getDeploymentAdapter, getDeploymentTarget } from 'shared/platform/deployment';
@@ -52,6 +52,8 @@ import { createKVProvider } from 'shared/platform/kv';
 import { createObjectStore } from 'shared/platform/storage';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
+
+const env = getRuntimeEnv() as any;
 
 
 interface InstanceMetadata {
