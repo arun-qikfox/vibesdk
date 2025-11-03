@@ -6,7 +6,8 @@ const { setupGlobalEnvironment } = require('./setup-env');
 const { formatApiResponse, extractPathParams, extractQueryParams } = require('./api-client-router.js');
 const { initializeMiddlewareAdapters } = require('./hono-middleware-adapters');
 const { setupHonoCompatibleRoutes } = require('./setup-hono-routes');
-const { agentStates } = require('./gcp-coding-agent-controller');
+// Lazy import agentStates to avoid timing issues
+let agentStates = null;
 
 // Get the runtime configuration from env (similar to worker)
 const RUNTIME_PROVIDER = process.env.RUNTIME_PROVIDER || 'nodejs';
@@ -79,7 +80,7 @@ const app = new Hono();
         });
 
 // Handle WebSocket connections for agent communication
-        wss.on('connection', (ws, request) => {
+        wss.on('connection', async (ws, request) => {
             try {
                 console.log('🔌 WebSocket connection attempt:', request.url);
                 console.log('🔌 Request headers:', request.headers); // Debug headers
@@ -100,12 +101,23 @@ const app = new Hono();
                 const agentId = match[1];
                 console.log(`🔌 New WebSocket connection for agent: ${agentId}`);
 
+                // Lazy import agentStates to avoid timing issues
+                if (!agentStates) {
+                    const gcpController = require('./gcp-coding-agent-controller');
+                    agentStates = gcpController.agentStates;
+                    console.log(`🔌 agentStates imported:`, typeof agentStates, agentStates ? 'defined' : 'undefined');
+                }
+
                 // Check if agent exists
-                const agentState = agentStates.get(agentId);
+                const agentState = await agentStates.get(agentId);
                 if (!agentState) {
                     console.log(`❌ Agent ${agentId} not found for WebSocket connection`);
                     ws.close(1000, 'Agent not found');
                     return;
+                }
+
+                if (!agentState.websocketConnections) {
+                    agentState.websocketConnections = new Set();
                 }
 
                 // Add WebSocket to agent connections

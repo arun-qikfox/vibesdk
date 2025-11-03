@@ -32,13 +32,11 @@ try {
 const WebSocket = require('ws');
 const { Storage } = require('@google-cloud/storage');
 const path = require('path');
-const { generateId } = require('../worker/utils/idGenerator');
+// Simple ID generator function
+const generateId = () => crypto.randomUUID();
 
 // Agent state storage - uses PostgreSQL service when available, falls back to in-memory
 const activeAgents = new Map(); // agentId -> { websocket, state, files }
-
-// Export for WebSocket server access - in-memory for active connections
-module.exports.activeAgents = activeAgents;
 
 /**
  * Agent state wrapper that uses PostgreSQL when available
@@ -153,7 +151,6 @@ class AgentStateWrapper {
 
 // Create singleton instance
 const agentStates = new AgentStateWrapper();
-module.exports.agentStates = agentStates;
 
 // Logger
 const createLogger = (name) => ({
@@ -254,13 +251,15 @@ class GCPCodingAgentController extends BaseController {
                 sandboxSessionId
             };
 
-            agentStates.set(agentId, agentState);
+            await agentStates.set(agentId, agentState);
             logger.info(`Agent ${agentId} state initialized for user ${authUser.id}`);
 
             // Create websocket and HTTP URLs for connection
             let websocketUrl, httpStatusUrl;
-            websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
-            httpStatusUrl = `${url.origin}/api/agent/${agentId}`;
+            const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+            const baseUrl = hostname || url.host || 'localhost:3001';
+            websocketUrl = `${wsProtocol}//${baseUrl}/api/agent/${agentId}/ws`;
+            httpStatusUrl = `${url.protocol}//${baseUrl}/api/agent/${agentId}`;
 
             // Process uploaded images if any
             let uploadedImages = [];
@@ -385,7 +384,7 @@ class GCPCodingAgentController extends BaseController {
             logger.info(`Connecting to existing agent: ${agentId}`);
 
             // Check if agent exists in our "Durable Objects"
-            const agentState = agentStates.get(agentId);
+            const agentState = await agentStates.get(agentId);
             if (!agentState) {
                 return GCPCodingAgentController.createErrorResponse('Agent instance not found', 404);
             }
@@ -395,7 +394,9 @@ class GCPCodingAgentController extends BaseController {
             try {
                 // Try Fetch Request interface first
                 const url = new URL(request.url);
-                websocketUrl = `${url.protocol === 'https:' ? 'wss:' : 'ws:'}//${url.host}/api/agent/${agentId}/ws`;
+                const hostname = url.hostname === 'localhost' ? `localhost:${url.port}` : url.host;
+                const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+                websocketUrl = `${wsProtocol}//${hostname}/api/agent/${agentId}/ws`;
             } catch (e) {
                 // Fallback for Node.js request objects
                 websocketUrl = `ws://localhost:3001/api/agent/${agentId}/ws`;
@@ -429,7 +430,7 @@ class GCPCodingAgentController extends BaseController {
             logger.info(`Deploying preview for agent: ${agentId}`);
 
             // Get agent state
-            const agentState = agentStates.get(agentId);
+            const agentState = await agentStates.get(agentId);
             if (!agentState) {
                 return GCPCodingAgentController.createErrorResponse('Agent instance not found', 404);
             }
@@ -1183,7 +1184,7 @@ createApp(App).mount('#app')`
             logger.info('GCP: Initializing agent with template', { agentId, template: config.templateInfo.selection.selectedTemplateName });
 
             // Store configuration for later use
-            const agentState = agentStates.get(agentId);
+            const agentState = await agentStates.get(agentId);
             if (agentState) {
                 agentState.initialized = true;
                 agentState.status = 'ready';
@@ -1205,7 +1206,7 @@ createApp(App).mount('#app')`
         try {
             logger.info('GCP: Starting simulated agent streaming', { agentId });
 
-            const agentState = agentStates.get(agentId);
+            const agentState = await agentStates.get(agentId);
             if (!agentState) return;
 
             // Send files one at a time like Cloudflare
@@ -1244,5 +1245,7 @@ createApp(App).mount('#app')`
 }
 
 module.exports = {
-    GCPCodingAgentController
+    GCPCodingAgentController,
+    agentStates,
+    activeAgents
 };
