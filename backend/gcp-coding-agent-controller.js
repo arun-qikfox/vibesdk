@@ -291,6 +291,16 @@ class GCPCodingAgentController extends BaseController {
                 generationReplaySent: false
             };
 
+            agentState.conversationHistory.push({
+                conversationId: `system-${Date.now()}`,
+                role: 'assistant',
+                content: [{
+                    type: 'text',
+                    text: 'Agent initialized. Awaiting code generation command.'
+                }],
+                timestamp: Date.now()
+            });
+
             await agentStates.set(agentId, agentState);
             logger.info(`Agent ${agentId} state initialized for user ${authUser.id}`);
 
@@ -321,24 +331,7 @@ class GCPCodingAgentController extends BaseController {
                 agentId
             });
 
-            // Set up NDJSON streaming response like Cloudflare
-            let terminated = false;
-            const { readable, writable } = new TransformStream({
-                transform(chunk, controller) {
-                    if (chunk === "terminate") {
-                        terminated = true;
-                        // Don't terminate here, let natural close happen
-                        return;
-                    } else if (!terminated) {
-                        const encoded = new TextEncoder().encode(JSON.stringify(chunk) + '\n');
-                        controller.enqueue(encoded);
-                    }
-                }
-            });
-            const writer = writable.getWriter();
-
-            // Send initial data
-            writer.write({
+            const initialPayload = JSON.stringify({
                 message: 'Code generation started',
                 agentId: agentId,
                 websocketUrl,
@@ -347,25 +340,9 @@ class GCPCodingAgentController extends BaseController {
                     name: templateDetails.name,
                     files: templateDetails.files
                 }
-            });
+            }) + '\n';
 
-            // Start async agent execution (simulating Cloudflare agent)
-            GCPCodingAgentController.simulateAgentStreaming(agentId, writer).then(() => {
-                // Only close writer if not already terminated
-                if (!terminated && !writer.locked) {
-                    writer.close().catch(err => {
-                        // Ignore close errors if already terminated
-                        logger.debug('Writer close ignored - already terminated');
-                    });
-                }
-            }).catch((error) => {
-                logger.error('Error in simulateAgentStreaming:', error);
-                if (!terminated && !writer.locked) {
-                    writer.close().catch(() => {});
-                }
-            });
-
-            return new Response(readable, {
+            return new Response(initialPayload, {
                 status: 200,
                 headers: {
                     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -1238,6 +1215,8 @@ createApp(App).mount('#app')`
 
                 // Add template configuration
                 agentState.config = config;
+
+                await agentStates.set(agentId, agentState);
             }
 
         } catch (error) {
@@ -1246,56 +1225,6 @@ createApp(App).mount('#app')`
         }
     }
 
-    /**
-     * Simulate agent streaming (GCP equivalent of Cloudflare agent execution)
-     */
-    static async simulateAgentStreaming(agentId, writer) {
-        try {
-            logger.info('GCP: Starting simulated agent streaming', { agentId });
-
-            const agentState = await agentStates.get(agentId);
-            if (!agentState) return;
-
-            agentState.status = 'generating';
-            if (!agentState.generationStartedAt) {
-                agentState.generationStartedAt = Date.now();
-            }
-
-            // Send files one at a time like Cloudflare
-            const templateFiles = agentState.files || [];
-
-            for (let i = 0; i < templateFiles.length; i++) {
-                const file = templateFiles[i];
-
-                logger.info(`GCP: Sending file ${file.filePath} (${i + 1}/${templateFiles.length})`);
-
-                // Send file complete content in one go (simplified)
-                writer.write({
-                    type: 'file_generated',
-                    fileName: file.filePath, // Use filePath for FileExplorer
-                    fileContents: file.fileContents,
-                    progress: Math.round(((i + 1) / templateFiles.length) * 100)
-                });
-
-                // Simulate some delay between files
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
-
-            // Send completion
-            writer.write("terminate");
-            writer.close();
-
-            agentState.status = 'completed';
-            agentState.generationCompletedAt = Date.now();
-            agentState.generationReplaySent = false;
-            logger.info(`GCP: Agent ${agentId} completed successfully`);
-
-        } catch (error) {
-            logger.error('GCP: Error in simulateAgentStreaming', error);
-            writer.write("terminate");
-            writer.close();
-        }
-    }
 }
 
 module.exports = {

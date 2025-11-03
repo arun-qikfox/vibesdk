@@ -56,13 +56,14 @@ const ensureAgentModelConfigs = (agentState) => {
 };
 
 const replayGenerationToSockets = (agentId, agentState) => {
-    if (!agentState) return;
+    if (!agentState || !agentState.websocketConnections) return;
     const files = Array.isArray(agentState.files) ? agentState.files : [];
     const totalFiles = files.length;
 
     broadcastToAgentConnections(agentState, {
         type: 'generation_started',
         agentId,
+        message: 'Replaying previous code generation',
         totalFiles,
         startedAt: agentState.generationStartedAt || Date.now()
     });
@@ -70,46 +71,60 @@ const replayGenerationToSockets = (agentId, agentState) => {
     broadcastToAgentConnections(agentState, {
         type: 'phase_generating',
         agentId,
-        message: 'Generating project files...'
+        message: 'Replaying generated files...'
     });
 
     files.forEach((file, index) => {
+        const filePath = file.filePath || file.path || `file-${index + 1}.txt`;
+        const fileContents = typeof file.fileContents === 'string' ? file.fileContents : (file.contents || '');
+
         broadcastToAgentConnections(agentState, {
             type: 'file_generating',
             agentId,
-            filePath: file.filePath,
-            index: index + 1,
-            totalFiles
+            filePath
         });
+
+        if (fileContents) {
+            broadcastToAgentConnections(agentState, {
+                type: 'file_chunk_generated',
+                agentId,
+                filePath,
+                chunk: fileContents
+            });
+        }
 
         broadcastToAgentConnections(agentState, {
             type: 'file_generated',
             agentId,
             file: {
-                filePath: file.filePath,
-                fileContents: file.fileContents
+                filePath,
+                fileContents,
+                explanation: file.explanation || '',
+                language: file.language || null
             },
-            index: index + 1,
-            totalFiles
+            progress: totalFiles ? Math.round(((index + 1) / totalFiles) * 100) : 100
         });
     });
 
     broadcastToAgentConnections(agentState, {
         type: 'phase_generated',
         agentId,
-        message: 'Project files generated'
+        message: totalFiles > 0 ? 'Project files replayed' : 'No files were generated previously'
     });
 
     broadcastToAgentConnections(agentState, {
         type: 'generation_complete',
         agentId,
         status: agentState.status || 'completed',
+        message: 'Replay complete',
         completedAt: agentState.generationCompletedAt || Date.now()
     });
 
     agentState.generationReplaySent = true;
+    agentStates.set(agentId, agentState).catch((error) => {
+        console.warn(`Failed to persist replay state for agent ${agentId}`, error);
+    });
 };
-
 const appendConversationEntry = (agentState, entry) => {
     if (!agentState) return;
     if (!Array.isArray(agentState.conversationHistory)) {
@@ -128,6 +143,122 @@ const buildAssistantResponse = (agentState, userMessage) => {
         return `${baseMessage} Let me know if you need any updates or additions.`;
     }
     return `${baseMessage} I noted: "${userMessage}". Let me know how you would like me to adjust the project.`;
+};
+
+const activeGenerations = new Set();
+
+const startAgentGeneration = async (agentId, agentState) => {
+    if (!agentState) return;
+    if (activeGenerations.has(agentId)) {
+        return;
+    }
+    activeGenerations.add(agentId);
+    try {
+        const files = Array.isArray(agentState.files) ? agentState.files : [];
+        const totalFiles = files.length;
+
+        agentState.status = 'generating';
+        agentState.generationStartedAt = Date.now();
+        agentState.generationCompletedAt = null;
+        agentState.generationReplaySent = false;
+        appendConversationEntry(agentState, {
+            conversationId: `system-${createConversationId()}`,
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Starting code generation.' }],
+            timestamp: Date.now()
+        });
+        await agentStates.set(agentId, agentState);
+
+        broadcastToAgentConnections(agentState, {
+            type: 'generation_started',
+            agentId,
+            message: 'Starting code generation',
+            totalFiles
+        });
+
+        broadcastToAgentConnections(agentState, {
+            type: 'phase_generating',
+            agentId,
+            message: 'Generating project files...'
+        });
+
+        for (let index = 0; index < totalFiles; index++) {
+            const file = files[index] || {};
+            const filePath = file.filePath || file.path || `file-${index + 1}.txt`;
+            const fileContents = typeof file.fileContents === 'string' ? file.fileContents : (file.contents || '');
+
+            broadcastToAgentConnections(agentState, {
+                type: 'file_generating',
+                agentId,
+                filePath
+            });
+
+            if (fileContents) {
+                broadcastToAgentConnections(agentState, {
+                    type: 'file_chunk_generated',
+                    agentId,
+                    filePath,
+                    chunk: fileContents
+                });
+            }
+
+            files[index] = {
+                ...file,
+                filePath,
+                fileContents
+            };
+
+            broadcastToAgentConnections(agentState, {
+                type: 'file_generated',
+                agentId,
+                file: {
+                    filePath,
+                    fileContents,
+                    explanation: file.explanation || '',
+                    language: file.language || null
+                },
+                progress: totalFiles ? Math.round(((index + 1) / totalFiles) * 100) : 100
+            });
+        }
+
+        agentState.files = files;
+
+        broadcastToAgentConnections(agentState, {
+            type: 'phase_generated',
+            agentId,
+            message: totalFiles > 0 ? 'Project files generated' : 'No files required for this project'
+        });
+
+        agentState.status = 'completed';
+        agentState.generationCompletedAt = Date.now();
+        agentState.generationReplaySent = true;
+        appendConversationEntry(agentState, {
+            conversationId: `system-${createConversationId()}`,
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Code generation complete. Review the files or request updates anytime.' }],
+            timestamp: Date.now()
+        });
+        await agentStates.set(agentId, agentState);
+
+        broadcastToAgentConnections(agentState, {
+            type: 'generation_complete',
+            agentId,
+            status: agentState.status,
+            message: 'Code generation complete',
+            completedAt: agentState.generationCompletedAt
+        });
+    } catch (error) {
+        console.error(`Error generating project for agent ${agentId}:`, error);
+        broadcastToAgentConnections(agentState, {
+            type: 'error',
+            message: 'Failed to generate project files. Please retry.'
+        });
+        agentState.status = 'error';
+        agentState.generationReplaySent = false;
+        await agentStates.set(agentId, agentState);
+    } finally {
+        activeGenerations.delete(agentId);
+    }
 };
 
 // Get the runtime configuration from env (similar to worker)
@@ -272,7 +403,27 @@ const app = new Hono();
                                 break;
                             }
                             case 'generate_all': {
-                                replayGenerationToSockets(agentId, agentState);
+                                if (agentState.status === 'generating') {
+                                    sendSocketMessage(ws, {
+                                        type: 'status',
+                                        agentId,
+                                        status: agentState.status
+                                    });
+                                    break;
+                                }
+
+                                if (agentState.status === 'completed' && agentState.generationReplaySent) {
+                                    replayGenerationToSockets(agentId, agentState);
+                                    break;
+                                }
+
+                                startAgentGeneration(agentId, agentState).catch((error) => {
+                                    console.error(`Error triggering generation for agent ${agentId}:`, error);
+                                    sendSocketMessage(ws, {
+                                        type: 'error',
+                                        message: 'Failed to start code generation'
+                                    });
+                                });
                                 break;
                             }
                             case 'get_conversation_state': {
@@ -419,3 +570,6 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
     process.exit(1);
 });
+
+
+
