@@ -185,6 +185,7 @@ class GCPCodingAgentController extends BaseController {
             });
             const writer = writable.getWriter();
 
+            // Create agent first
             const agentEntry = await agentManager.ensureAgent(agentId, env);
             const agent = agentEntry.agent;
 
@@ -205,6 +206,7 @@ class GCPCodingAgentController extends BaseController {
                 enableFastSmartCodeFix: false
             };
 
+            // Send initial response with connection info
             await writer.write({
                 message: 'Code generation started',
                 agentId,
@@ -216,37 +218,56 @@ class GCPCodingAgentController extends BaseController {
                 }
             });
 
-            const agentPromise = agent.initialize({
-                query,
-                language: body.language || 'typescript',
-                frameworks: body.frameworks || ['react', 'vite'],
-                hostname,
-                inferenceContext,
-                images: uploadedImages,
-                onBlueprintChunk: (chunk) => {
-                    writer.write({ chunk });
-                },
-                templateInfo: { templateDetails, selection },
-                sandboxSessionId
-            }, body.agentMode || 'deterministic');
+            logger.info(`Starting agent initialization for ${agentId}`);
 
-            agentPromise.then(async () => {
+            try {
+                // Initialize agent and wait for completion
+                const initResult = await agent.initialize({
+                    query,
+                    language: body.language || 'typescript',
+                    frameworks: body.frameworks || ['react', 'vite'],
+                    hostname,
+                    inferenceContext,
+                    images: uploadedImages,
+                    onBlueprintChunk: (chunk) => {
+                        logger.debug(`Sending blueprint chunk for agent ${agentId}`, { chunkLength: chunk.length });
+                        writer.write({ chunk });
+                    },
+                    templateInfo: { templateDetails, selection },
+                    sandboxSessionId
+                }, body.agentMode || 'deterministic');
+
+                logger.info(`Agent ${agentId} initialization completed successfully`, {
+                    hasBlueprint: !!initResult?.blueprint,
+                    blueprintTitle: initResult?.blueprint?.title
+                });
+
+                // Send completion message
+                await writer.write({
+                    type: 'complete',
+                    message: 'Blueprint generation completed',
+                    blueprint: initResult?.blueprint
+                });
+
+            } catch (initError) {
+                logger.error(`Agent ${agentId} initialization failed`, initError);
+
+                // Send error message but don't terminate stream yet
+                await writer.write({
+                    type: 'error',
+                    message: initError instanceof Error ? initError.message : 'Initialization failed',
+                    error: initError instanceof Error ? initError.message : String(initError)
+                });
+            }
+
+            // Always terminate the stream properly
+            try {
                 await writer.write("terminate");
                 await writer.close();
-                logger.info(`Agent ${agentId} initialization stream closed`);
-            }).catch(async (initError) => {
-                logger.error(`Agent ${agentId} initialization failed`, initError);
-                try {
-                    await writer.write({
-                        type: 'error',
-                        message: initError instanceof Error ? initError.message : 'Initialization failed'
-                    });
-                    await writer.write("terminate");
-                    await writer.close();
-                } catch (streamError) {
-                    logger.error('Failed to close initialization stream', streamError);
-                }
-            });
+                logger.info(`Agent ${agentId} initialization stream closed successfully`);
+            } catch (streamError) {
+                logger.error(`Failed to close initialization stream for ${agentId}`, streamError);
+            }
 
             return new Response(readable, {
                 status: 200,

@@ -73,17 +73,21 @@ const app = new Hono();
                 }
 
                 const agentId = match[1];
-                console.log(`[WebSocket] New connection for agent: ${agentId}`);
+                console.log(`[WebSocket] New connection attempt for agent: ${agentId}`);
 
+                // Check if agent exists
                 const agentEntry = agentManager.getAgent(agentId);
                 if (!agentEntry) {
-                    console.log(`[WebSocket] Agent ${agentId} not found for WebSocket connection`);
+                    console.log(`[WebSocket] Agent ${agentId} not found in agent manager`);
+                    console.log(`[WebSocket] Available agents:`, agentManager.listAgents());
+                    console.log(`[WebSocket] This usually means the agent initialization failed or the agent ID is incorrect`);
                     ws.close(1000, 'Agent not found');
                     return;
                 }
 
+                console.log(`[WebSocket] Found agent ${agentId}, attaching connection...`);
                 await agentManager.attachConnection(agentId, ws, request);
-                console.log(`[WebSocket] Connection established for agent: ${agentId}`);
+                console.log(`[WebSocket] Connection established successfully for agent: ${agentId}`);
             } catch (error) {
                 console.error('[WebSocket] Error setting up connection:', error);
                 try {

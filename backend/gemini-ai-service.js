@@ -21,63 +21,44 @@ if (typeof global.fetch !== 'function') {
     };
 }
 
-// Import shared types for consistency
-const { AIModels, AgentActionKey } = require('../shared/types/models.cjs');
+const agentConfigModulePromise = import('../worker/agents/inferutils/config.ts')
+    .catch((error) => {
+        console.warn('[GeminiAI] Failed to import agent config, using defaults', error);
+        return { AGENT_CONFIG: {} };
+    });
 
-// Import agent config to use the correct models
-const { AGENT_CONFIG } = require('../worker/agents/inferutils/config.ts');
+const DEFAULT_GENERATION_SETTINGS = {
+    temperature: 0.2,
+    maxTokens: 2048,
+    topP: 0.95,
+    topK: 40,
+};
 
-/**
- * Gemini AI Service Configuration
- * Environment-driven configuration for different Gemini models
- */
-class GeminiConfig {
-    static getModels() {
-        // Use models from the centralized agent configuration
-        const templateConfig = AGENT_CONFIG.templateSelection;
-
-        return {
-            // Template selection model (primary)
-            [AIModels.GEMINI_FLASH_LITE]: {
-                model: templateConfig.name.replace('google-ai-studio/', ''),
-                temperature: templateConfig.temperature || 0.6,
-                maxTokens: templateConfig.max_tokens || 2000,
-                topP: 0.95,
-                topK: 40
-            },
-
-            // Template selection fallback model
-            [AIModels.GEMINI_FLASH]: {
-                model: (templateConfig.fallbackModel || AIModels.GEMINI_2_5_FLASH).replace('google-ai-studio/', ''),
-                temperature: 0.2,
-                maxTokens: 8192,
-                topP: 0.95,
-                topK: 40
-            },
-
-            // Blueprint generation model
-            [AIModels.GEMINI_PRO]: {
-                model: AGENT_CONFIG.blueprint.name.replace('google-ai-studio/', ''),
-                temperature: AGENT_CONFIG.blueprint.temperature || 0.7,
-                maxTokens: AGENT_CONFIG.blueprint.max_tokens || 64000,
-                topP: 0.95,
-                topK: 40
-            }
-        };
+function normalizeModelName(modelName) {
+    if (!modelName || typeof modelName !== 'string') {
+        return '';
     }
+    return modelName.replace(/^google-ai-studio\//, '');
+}
 
-    static getDefaultModel(actionKey) {
-        const modelMap = {
-            [AgentActionKey.GENERATE_APP]: AIModels.GEMINI_PRO,
-            [AgentActionKey.BLUEPRINT_GENERATION]: AIModels.GEMINI_PRO,
-            [AgentActionKey.CODE_GENERATION]: AIModels.GEMINI_FLASH,
-            [AgentActionKey.REVIEW_CODE]: AIModels.GEMINI_PRO,
-            [AgentActionKey.ANALYZE_REQUIREMENTS]: AIModels.GEMINI_PRO,
-            [AgentActionKey.TEMPLATE_SELECTION]: AIModels.GEMINI_FLASH
-        };
-
-        return modelMap[actionKey] || AIModels.GEMINI_FLASH;
+function effectiveTemperature(config = {}, overrides = {}) {
+    if (overrides.temperature != null) {
+        return overrides.temperature;
     }
+    if (config.temperature != null) {
+        return config.temperature;
+    }
+    return DEFAULT_GENERATION_SETTINGS.temperature;
+}
+
+function effectiveMaxTokens(config = {}, overrides = {}) {
+    if (overrides.maxTokens != null) {
+        return overrides.maxTokens;
+    }
+    if (config.max_tokens != null) {
+        return config.max_tokens;
+    }
+    return DEFAULT_GENERATION_SETTINGS.maxTokens;
 }
 
 /**
@@ -219,7 +200,13 @@ class GeminiAIService {
 
         // Configure Google Generative AI for Node.js environment
         this.genAI = new GoogleGenerativeAI(apiKey);
-        this.models = GeminiConfig.getModels();
+        this.agentConfig = null;
+        this.agentConfigPromise = agentConfigModulePromise
+            .then((module) => module.AGENT_CONFIG || {})
+            .catch((error) => {
+                console.warn('[GeminiAI] Unable to load agent configuration. Using defaults.', error);
+                return {};
+            });
 
         // Setup logging
         this.logger = {
@@ -230,53 +217,68 @@ class GeminiAIService {
         };
     }
 
+    async loadAgentConfig() {
+        if (this.agentConfig) {
+            return this.agentConfig;
+        }
+        this.agentConfig = await this.agentConfigPromise;
+        return this.agentConfig;
+    }
+
+    async getActionConfig(actionKey) {
+        const config = (await this.loadAgentConfig())[actionKey];
+        return config || {};
+    }
+
     /**
      * Generate content using specified Gemini model
      */
-    async generateContent(modelName, prompt, options = {}) {
+    async generateContent(modelName, prompt, options = {}, depth = 0) {
         try {
-            this.logger.info(`Generating content with model: ${modelName}`);
-
-            const modelConfig = this.models[modelName];
-            if (!modelConfig) {
-                throw new Error(`Unknown model: ${modelName}`);
+            const normalizedModel = normalizeModelName(modelName);
+            if (!normalizedModel) {
+                throw new Error('Gemini model name is not configured.');
             }
 
+            this.logger.info(`Generating content with model: ${normalizedModel}`);
+
             const model = this.genAI.getGenerativeModel({
-                model: modelConfig.model,
+                model: normalizedModel,
                 generationConfig: {
-                    temperature: options.temperature || modelConfig.temperature,
-                    maxOutputTokens: options.maxTokens || modelConfig.maxTokens,
-                    topP: options.topP || modelConfig.topP,
-                    topK: options.topK || modelConfig.topK,
+                    temperature: options.temperature ?? DEFAULT_GENERATION_SETTINGS.temperature,
+                    maxOutputTokens: options.maxTokens ?? DEFAULT_GENERATION_SETTINGS.maxTokens,
+                    topP: options.topP ?? DEFAULT_GENERATION_SETTINGS.topP,
+                    topK: options.topK ?? DEFAULT_GENERATION_SETTINGS.topK,
                     ...(options.responseMimeType && { responseMimeType: options.responseMimeType })
                 }
             });
 
-            // Handle images if provided
             let finalPrompt = prompt;
-            
             if (options.images && options.images.length > 0) {
-                // Gemini supports multimodal input - convert images to proper format
-                const imageParts = await Promise.all(options.images.map(async (image) => {
-                    return await this.convertImageForGemini(image);
-                }));
-
-                finalPrompt = [prompt, ...imageParts];
+                const imageParts = await Promise.all(options.images.map(async (image) => this.convertImageForGemini(image)));
+                finalPrompt = [prompt, ...imageParts.filter(Boolean)];
             }
-            console.log("*********** final prompt", model, finalPrompt)
+
             const result = await model.generateContent(finalPrompt);
             const response = await result.response;
 
             const generatedText = await this.extractTextFromResponse(response);
             const usage = this.extractUsageInfo(response);
 
-            if (!generatedText) {
-                this.logger.warn('Gemini AI returned empty text content', { model: modelName });
+            if (!generatedText && options.fallbackModel && depth === 0) {
+                this.logger.warn('Primary Gemini model returned empty text content, attempting fallback', {
+                    primary: normalizedModel,
+                    fallback: options.fallbackModel
+                });
+                return this.generateContent(options.fallbackModel, prompt, { ...options, fallbackModel: undefined }, depth + 1);
             }
 
-            this.logger.info(`Content generated successfully`, {
-                model: modelName,
+            if (!generatedText) {
+                this.logger.warn('Gemini AI returned empty text content', { model: normalizedModel });
+            }
+
+            this.logger.info('Content generated successfully', {
+                model: normalizedModel,
                 inputTokens: usage?.inputTokens,
                 outputTokens: usage?.outputTokens,
                 totalTokens: usage?.totalTokens
@@ -288,10 +290,10 @@ class GeminiAIService {
                     inputTokens: usage?.inputTokens || 0,
                     outputTokens: usage?.outputTokens || 0,
                     totalTokens: usage?.totalTokens || 0,
-                    model: modelName
+                    model: normalizedModel
                 },
                 metadata: {
-                    model: modelName,
+                    model: normalizedModel,
                     timestamp: new Date().toISOString(),
                     requestId: this.generateRequestId()
                 }
@@ -299,7 +301,30 @@ class GeminiAIService {
 
         } catch (error) {
             this.logger.error('Failed to generate content', error);
-            throw new Error(`Gemini AI generation failed: ${error.message}`);
+
+            if (options.fallbackModel && depth === 0) {
+                this.logger.warn('Retrying Gemini request with fallback model due to error', {
+                    primary: normalizedModel,
+                    fallback: options.fallbackModel
+                });
+                return this.generateContent(options.fallbackModel, prompt, { ...options, fallbackModel: undefined }, depth + 1);
+            }
+
+            return {
+                text: '',
+                usage: {
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    totalTokens: 0,
+                    model: normalizedModel
+                },
+                metadata: {
+                    model: normalizedModel,
+                    timestamp: new Date().toISOString(),
+                    requestId: this.generateRequestId(),
+                    error: error instanceof Error ? error.message : String(error)
+                }
+            };
         }
     }
 
@@ -310,12 +335,17 @@ class GeminiAIService {
         try {
             this.logger.info('Generating blueprint with Gemini', { query: query.substring(0, 100) + '...' });
 
-            const modelName = AIModels.GEMINI_PRO; // Always use Pro for blueprint generation
             const prompts = AgentPrompts.getBlueprintPrompt(query, templates, context);
-
             const fullPrompt = `${prompts.systemPrompt}\n\nUser Request:\n${prompts.userPrompt}`;
 
-            const result = await this.generateContent(modelName, fullPrompt);
+            const config = await this.getActionConfig('blueprint');
+            const modelName = config.name || 'google-ai-studio/gemini-2.5-pro';
+
+            const result = await this.generateContent(modelName, fullPrompt, {
+                temperature: effectiveTemperature(config),
+                maxTokens: effectiveMaxTokens(config),
+                fallbackModel: config.fallbackModel
+            });
             const blueprint = this.parseBlueprintResponse(result.text);
 
             return {
@@ -338,14 +368,16 @@ class GeminiAIService {
         try {
             this.logger.info('Generating code with Gemini', { phase, language: context.language });
 
-            const modelName = context.language === 'typescript' ? AIModels.GEMINI_FLASH : AIModels.GEMINI_FLASH;
             const prompts = AgentPrompts.getCodeGenerationPrompt(phase, context, existingCode);
-
             const fullPrompt = `${prompts.systemPrompt}\n\n${prompts.userPrompt}`;
 
+            const config = await this.getActionConfig('phaseImplementation');
+            const modelName = config.name || 'google-ai-studio/gemini-2.5-flash';
+
             const result = await this.generateContent(modelName, fullPrompt, {
-                temperature: 0.1, // Lower temperature for more deterministic code
-                maxTokens: 8192  // Allow longer code responses
+                temperature: effectiveTemperature(config, { temperature: 0.1 }),
+                maxTokens: effectiveMaxTokens(config, { maxTokens: 8192 }),
+                fallbackModel: config.fallbackModel
             });
 
             const codeBlocks = this.extractCodeBlocks(result.text);
@@ -370,12 +402,17 @@ class GeminiAIService {
         try {
             this.logger.info('Reviewing code with Gemini', { codeLength: code.length });
 
-            const modelName = AIModels.GEMINI_PRO; // Use Pro for thorough review
             const prompts = AgentPrompts.getReviewPrompt(code, context);
-
             const fullPrompt = `${prompts.systemPrompt}\n\n${prompts.userPrompt}`;
 
-            const result = await this.generateContent(modelName, fullPrompt);
+            const config = await this.getActionConfig('codeReview');
+            const modelName = config.name || 'google-ai-studio/gemini-2.5-pro';
+
+            const result = await this.generateContent(modelName, fullPrompt, {
+                temperature: effectiveTemperature(config),
+                maxTokens: effectiveMaxTokens(config),
+                fallbackModel: config.fallbackModel
+            });
 
             const review = this.parseReviewResponse(result.text);
 
@@ -394,14 +431,14 @@ class GeminiAIService {
         }
     }
 
+
+
     /**
      * Template analysis and selection using Gemini AI
      */
     async analyzeTemplates(query, templates) {
         try {
             this.logger.info('Analyzing templates with Gemini AI', { templateCount: templates.length, query: query.substring(0, 50) + '...' });
-
-            const modelName = AIModels.GEMINI_FLASH_LITE; // Use config-specified model for template selection
 
             const prompt = `Analyze the following user query and recommend the most suitable template from the available options.
 
@@ -425,13 +462,15 @@ Respond with valid JSON in this exact format:
   "customizationsNeeded": ["any specific modifications needed"]
 }`;
 
-            const result = await this.generateContent(modelName, prompt, {
-                temperature: 0.1, // Very low temperature for JSON structure
-                maxTokens: 1000,
-                responseMimeType: "application/json" // Force JSON response
-            });
+            const config = await this.getActionConfig('templateSelection');
+            const modelName = config.name || 'google-ai-studio/gemini-2.5-flash-lite';
 
-            this.logger.info('****** Gemini AI response text', result);
+            const result = await this.generateContent(modelName, prompt, {
+                temperature: effectiveTemperature(config, { temperature: 0.1 }),
+                maxTokens: effectiveMaxTokens(config, { maxTokens: 1000 }),
+                responseMimeType: 'application/json',
+                fallbackModel: config.fallbackModel
+            });
 
             const analysis = this.parseTemplateAnalysis(result.text);
 
@@ -480,8 +519,6 @@ Respond with valid JSON in this exact format:
      */
     async tryEnhanceWithAI(query, templates, keywordSelection) {
         try {
-            const modelName = AIModels.GEMINI_FLASH;
-
             const prompt = `Based on this user query: "${query}"
 
 The keyword analysis selected: "${keywordSelection.selectedTemplateName}" with reasoning: "${keywordSelection.reasoning}"
@@ -502,9 +539,13 @@ Respond with JSON:
   "enhancement": "what AI added beyond keywords"
 }`;
 
+            const templateConfig = await this.getActionConfig('templateSelection');
+            const modelName = templateConfig.name || 'google-ai-studio/gemini-2.5-flash';
+
             const result = await this.generateContent(modelName, prompt, {
-                temperature: 0.2,
-                maxTokens: 500
+                temperature: effectiveTemperature(templateConfig, { temperature: 0.2 }),
+                maxTokens: effectiveMaxTokens(templateConfig, { maxTokens: 500 }),
+                fallbackModel: templateConfig.fallbackModel
             });
 
             const enhancement = this.parseTemplateAnalysis(result.text);
@@ -866,9 +907,12 @@ Respond with JSON:
      */
     async healthCheck() {
         try {
-            const result = await this.generateContent(AIModels.GEMINI_FLASH_LITE, 'Hello, are you working?', {
-                maxTokens: 10,
-                temperature: 0
+            const config = await this.getActionConfig('templateSelection');
+            const modelName = config.name || 'google-ai-studio/gemini-2.5-flash-lite';
+            await this.generateContent(modelName, 'Hello, are you working?', {
+                maxTokens: effectiveMaxTokens(config, { maxTokens: 10 }),
+                temperature: effectiveTemperature(config, { temperature: 0 }),
+                fallbackModel: config.fallbackModel
             });
             return { healthy: true, responseTime: Date.now() };
         } catch (error) {
@@ -886,6 +930,5 @@ function createGeminiAIService(env) {
 module.exports = {
     GeminiAIService,
     createGeminiAIService,
-    AgentPrompts,
-    GeminiConfig
+    AgentPrompts
 };

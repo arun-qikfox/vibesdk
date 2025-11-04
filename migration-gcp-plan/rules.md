@@ -9,6 +9,16 @@ Use this rule file to coordinate the Google Cloud migration. An LLM or human ope
 - If work is blocked, set status to `blocked`, describe the blocker in `Notes`, and stop; do not advance to later steps.
 - Keep detailed implementation notes inside each spec file (e.g., `migration-gcp-plan/02-runtime-platform.md`) to maintain context.
 
+## 🔴 Priority TODOs (Strategy B Parity)
+These items **must** be consulted before resuming work on Strategy B. Update the status column whenever progress changes so operators immediately know what remains.
+
+| ID | Summary | Status | Owner | Last Update | Notes |
+| --- | --- | --- | --- | --- | --- |
+| P1 | Replace stub agent loader with Node-compatible shim that resolves `cloudflare:` imports without breaking WebSocket/agent flow | blocked | - | 2025-02-17 | Current attempt via `gcp-agent-manager.js` hits `ERR_INTERNAL_ASSERTION` when loading `agents` package; need deterministic shim or bundled worker artifact. |
+| P2 | Restore Cloudflare-equivalent agent bootstrap loop (single template load → blueprint → phase execution) | blocked | - | 2025-02-17 | Agents API currently loops template fetch twice and drops WebSocket after `ERR_EMPTY_RESPONSE`; fix depends on P1. |
+| P3 | Verify WebSocket handshake + streaming mirror Cloudflare sequence (NDJSON + WS events) once P1/P2 land | pending | - | - | Execute full Step-by-Step flow in description; log verification results in `strategy-b-implementation-status.md`. |
+| P4 | Run the existing worker bundle inside Cloud Run (no other Cloudflare deps) as interim solution | not-started | - | 2025-02-17 | Build worker bundle → package Docker image → deploy via Terraform Cloud Run module → attach service account with Storage/Firestore roles → expose `/api/agent` + WebSocket; document exact commands. |
+
 ## Migration Progress Tracker
 
 | Step | File | Summary | Status | Owner | Last Update | Notes |
