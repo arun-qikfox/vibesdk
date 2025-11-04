@@ -1,16 +1,129 @@
-# GCP Deployment Guide for VibSDK 🔥
+﻿# VibSDK GCP Deployment Runbook (Version 2 – Feb 2025)
+
+> **Version Notice:** These steps supersede the workerd-centric flow. Follow Sections 0–11 for the current combined frontend/backend deployment. The previous guide is retained at the end for context.
+
+## 0. Prerequisites (run once per workstation)
+- Install `gcloud`, `terraform` (v1.7+), `docker`, `node` 20 (or newer) with `npm`, and optionally `jq` for JSON parsing.
+- Ensure your account has IAM permissions for Cloud Run, Artifact Registry, Cloud SQL, Secret Manager, Pub/Sub, and Service Account administration.
+- Confirm Cloud SQL (PostgreSQL), Firestore (Datastore mode), required GCS buckets, and Gemini API access are available—this stack persists agent state in Postgres/Firestore and uses Gemini for code generation.
+- (Optional) Pre-enable required APIs:
+  ```bash
+  gcloud services enable run.googleapis.com sqladmin.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com cloudbuild.googleapis.com pubsub.googleapis.com
+  ```
+
+## 1. Install workspace dependencies in your existing repo
+Run these commands from the root of the local codebase you are already developing in:
+```bash
+cd /path/to/vibesdk
+npm ci
+```
+_Purpose: ensure all workspaces (frontend, backend, shared) are ready before building the container._
+
+## 2. Declare deployment environment variables
+```bash
+export PROJECT_ID=qfxcloud-app-builder
+export REGION=us-central1
+export REGISTRY="$REGION-docker.pkg.dev/$PROJECT_ID/vibesdk"
+export IMAGE_NAME=control-plane
+export IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
+export IMAGE_URI="$REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
+```
+_Purpose: centralise the Artifact Registry coordinates used in subsequent commands._
+
+## 3. Authenticate with Google Cloud services
+```bash
+gcloud auth login
+gcloud config set project "$PROJECT_ID"
+gcloud auth configure-docker "$REGION-docker.pkg.dev"
+gcloud auth application-default login   # optional: lets Terraform reuse Application Default Credentials
+```
+_Purpose: establish credentials for Docker pushes, Terraform, and gcloud CLI operations._
+
+## 4. Build the Cloud Run control-plane image (frontend + backend)
+```bash
+docker build -f container/Dockerfile.workerd -t "$IMAGE_URI" .
+```
+_Purpose: produce a Node 20 image that serves the built Vite SPA and the Hono API/WebSocket server._
+
+## 5. Push the image to Artifact Registry
+```bash
+docker push "$IMAGE_URI"
+```
+_Purpose: publish the container so Cloud Run can deploy it._
+
+## 6. Point Terraform at the freshly built image
+- macOS/Linux:
+  ```bash
+  sed -i.bak "s|^runtime_image.*|runtime_image        = \"$IMAGE_URI\"|" infra/gcp/terraform.tfvars
+  ```
+- Windows PowerShell:
+  ```powershell
+  (Get-Content infra/gcp/terraform.tfvars) -replace '^runtime_image.*',"runtime_image        = `"$IMAGE_URI`"" | Set-Content infra/gcp/terraform.tfvars
+  ```
+_Purpose: ensure the Cloud Run revision references the container you just pushed._
+
+## 7. Provision/update infrastructure with Terraform
+```bash
+cd infra/gcp
+terraform init
+terraform plan -var-file=terraform.tfvars
+terraform apply -var-file=terraform.tfvars
+cd ../..
+```
+_Purpose: create or update networking, Cloud SQL, buckets, Pub/Sub, secrets, and the Cloud Run control-plane service bound to the new image._
+
+## 8. Seed or rotate Secret Manager values (skip if already populated)
+```bash
+gcloud secrets versions add JWT_SECRET --data-file=- <<<"$(openssl rand -hex 32)"
+gcloud secrets versions add SECRETS_ENCRYPTION_KEY --data-file=- <<<"$(openssl rand -hex 32)"
+gcloud secrets versions add WEBHOOK_SECRET --data-file=- <<<"$(openssl rand -hex 32)"
+gcloud secrets versions add AI_PROXY_JWT_SECRET --data-file=- <<<"$(openssl rand -hex 32)"
+gcloud secrets versions add GOOGLE_AI_STUDIO_API_KEY --data-file=- <<<"your-google-ai-key"
+```
+_Purpose: provide Cloud Run with the credentials expected by `runtime_secret_bindings`. On Windows, generate secrets with PowerShell (`[Guid]::NewGuid().ToString("N")`) and use `Set-Content` to upload them._
+
+## 9. Apply database migrations to Cloud SQL
+```bash
+cd backend
+npm install --omit=dev
+npm run db:migrate
+cd ..
+```
+_Purpose: bring the PostgreSQL schema in line with the agent runtime._
+
+## 10. Sanity-check the deployed Cloud Run service
+```bash
+CONTROL_PLANE_URL=$(gcloud run services describe vibesdk-control-plane \
+  --region "$REGION" --format='value(status.uri)')
+curl "$CONTROL_PLANE_URL/health"
+curl "$CONTROL_PLANE_URL/api/health"
+```
+_Purpose: confirm the service responds over HTTP(S) before connecting the frontend._
+
+## 11. Validate the agentic flow end-to-end
+1. Open `$CONTROL_PLANE_URL` in a browser (the built SPA is served by the same container).
+2. Register or log in, start a generation, and monitor `/api/agent` responses (NDJSON) plus `/api/agent/<id>/ws` upgrades via browser DevTools.
+3. Tail Cloud Run logs when troubleshooting:
+   ```bash
+   gcloud run services logs read vibesdk-control-plane --region "$REGION" --project "$PROJECT_ID"
+   ```
+
+---
+
+## Version 1 (Archived – Original Instructions)
+### GCP Deployment Guide for VibSDK ??
 
 Based on your infrastructure code, here's the **complete step-by-step deployment process** to Google Cloud Platform:
 
-## 🔥 **OVERVIEW**
+## ?? **OVERVIEW**
 This deployment uses **Terraform + Cloud Run + Cloud SQL** architecture with containerized services running in Google Cloud.
 
 ---
 
-## 📋 **PREREQUISITES**
+## ?? **PREREQUISITES**
 
 **Required Tools:**
-- `terraform` ≥1.7.0
+- `terraform` =1.7.0
 - `gcloud` CLI
 - `docker`
 - `kubectl` (optional)
@@ -24,7 +137,7 @@ This deployment uses **Terraform + Cloud Run + Cloud SQL** architecture with con
 
 ---
 
-## 🏗️ **STEP 1: INFRASTRUCTURE PROVISIONING**
+## ??? **STEP 1: INFRASTRUCTURE PROVISIONING**
 
 ### **1.1 Initialize Terraform**
 ```bash
@@ -47,7 +160,7 @@ terraform plan -var-file=terraform.tfvars
 terraform apply -var-file=terraform.tfvars
 ```
 
-**⚠️ This creates:**
+**?? This creates:**
 - VPC network with private subnets
 - Cloud SQL PostgreSQL instance
 - Service accounts and IAM roles
@@ -57,7 +170,7 @@ terraform apply -var-file=terraform.tfvars
 
 ---
 
-## 🐳 **STEP 2: BUILD & PUSH CONTAINER IMAGES**
+## ?? **STEP 2: BUILD & PUSH CONTAINER IMAGES**
 
 ### **2.1 Build Worker Runtime Image**
 ```bash
@@ -82,7 +195,7 @@ gcloud builds submit --tag us-central1-docker.pkg.dev/qfxcloud-app-builder/vibes
 
 ---
 
-## 🗄️ **STEP 3: DATABASE SETUP**
+## ?? **STEP 3: DATABASE SETUP**
 
 ### **3.1 Run Database Migrations**
 ```bash
@@ -101,7 +214,7 @@ npm run check-db
 
 ---
 
-## 🚀 **STEP 4: CONFIGURE SECRETS & ENVIRONMENT**
+## ?? **STEP 4: CONFIGURE SECRETS & ENVIRONMENT**
 
 ### **4.1 Cloud Secret Manager**
 
@@ -126,117 +239,122 @@ gcloud secrets create GOOGLE_AI_STUDIO_API_KEY --data-file=- <<< "your-google-ai
 ```hcl
 # Required - Update these values
 runtime_image = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:deploy-20251027-195013"
-sandbox_job_image = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/sandbox-job-runner:latest"
-
-# Environment Variables
-runtime_env = {
-  RUNTIME_PROVIDER          = "gcp"
-  GCP_PROJECT_ID            = "qfxcloud-app-builder"
-  GCP_REGION                = "us-central1"
-  DEFAULT_DEPLOYMENT_TARGET = "gcp-cloud-run"
-  TEMPLATES_REPOSITORY      = "https://github.com/cloudflare/vibesdk-templates"
-  DISPATCH_NAMESPACE        = "vibesdk-default-namespace"
-  ENABLE_READ_REPLICAS      = "true"
-  CLOUDFLARE_AI_GATEWAY     = "vibesdk-gateway"
-  CUSTOM_DOMAIN             = "vibesdk-control-plane-2886014379.us-central1.run.app"
-  CUSTOM_PREVIEW_DOMAIN     = ""
-  MAX_SANDBOX_INSTANCES     = "10"
-  SANDBOX_INSTANCE_TYPE     = "standard-3"
-  USE_CLOUDFLARE_IMAGES     = "false"
-  SANDBOX_TOPIC             = "vibesdk-sandbox-requests"
-  SANDBOX_SUBSCRIPTION      = "vibesdk-sandbox-requests-subscription"
-  SANDBOX_RUN_COLLECTION    = "sandboxRuns"
-  GCS_TEMPLATES_BUCKET      = "vibesdk-templates"
-  GCS_FRONTEND_BUCKET       = "vibesdk-frontend"
-  GCS_KV_BUCKET             = "vibesdk-frontend"
-  FIRESTORE_PROJECT_ID      = "qfxcloud-app-builder"
-  FIRESTORE_COLLECTION      = "vibesdk-kv"
-}
-
-# Database Configuration
-sql_user_name = "vibesdk_user"  # Update if different
-sql_database_name = "vibesdk"   # Update if different
-sql_password_secret_id = "vibesdk-sql-app-password"  # Your secret name
-
-# Storage
-templates_bucket_name = "vibesdk-templates"
-deployment_context_bucket_name = "vibesdk-templates-contexts"
-
-# Preview Domain (Optional - for live deployments)
-enable_preview_ingress = false
-preview_domain = "ai.qikfox.com"
 ```
-
-### **4.3 Additional Secrets for Full Functionality**
-
-```bash
-# OAuth (Optional)
-gcloud secrets create GOOGLE_CLIENT_ID --data-file=- <<< "your-google-oauth-client-id"
-gcloud secrets create GOOGLE_CLIENT_SECRET --data-file=- <<< "your-google-oauth-client-secret"
-gcloud secrets create GITHUB_CLIENT_ID --data-file=- <<< "your-github-oauth-client-id"
-gcloud secrets create GITHUB_CLIENT_SECRET --data-file=- <<< "your-github-oauth-client-secret"
-
-# AI API Keys (Optional - based on providers you want)
-gcloud secrets create OPENAI_API_KEY --data-file=- <<< "your-openai-key"
-gcloud secrets create ANTHROPIC_API_KEY --data-file=- <<< "your-anthropic-key"
-gcloud secrets create OPENROUTER_API_KEY --data-file=- <<< "your-openrouter-key"
-gcloud secrets create GROQ_API_KEY --data-file=- <<< "your-groq-key"
-```
+*(Ensure other variables match your project setup.)*
 
 ---
 
-## 🔄 **STEP 5: REDEPLOY WITH SECRETS**
+## ?? **STEP 5: DEPLOY TO CLOUD RUN**
 
-### **5.1 Update Terraform with Secret References**
+### **5.1 Configure Environment Variables**
 ```bash
-terraform plan -var-file=terraform.tfvars
+# Run from the root of the repository
+export PROJECT_ID=qfxcloud-app-builder
+export REGION=us-central1
+export SERVICE_NAME=vibesdk-control-plane
+```
+
+### **5.2 Apply Terraform (Deployment)**
+```bash
+cd infra/gcp
 terraform apply -var-file=terraform.tfvars
 ```
 
-### **5.2 Deploy Application Code**
-```bash
-# Deploy control plane
-npm run deploy
+---
 
-# Or manual Cloud Run deploy
-gcloud run deploy vibesdk-control-plane \
-  --image us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:latest \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars="RUNTIME_PROVIDER=gcp" \
-  --service-account vibesdk-runtime@qfxcloud-app-builder.iam.gserviceaccount.com \
-  --vpc-connector vibesdk-connector \
-  --set-secrets="DATABASE_URL=DATABASE_URL:latest" \
-  --set-secrets="JWT_SECRET=JWT_SECRET:latest"
+## ? **STEP 6: TESTING & VERIFICATION**
+
+### **6.1 Health Check Endpoint**
+```bash
+curl https://vibesdk-control-plane-2886014379.us-central1.run.app/health
+```
+
+### **6.2 App Handshake**
+```bash
+curl https://vibesdk-control-plane-2886014379.us-central1.run.app/api/status
+```
+
+### **6.3 NDJSON Streaming Test**
+```bash
+curl -N https://vibesdk-control-plane-2886014379.us-central1.run.app/api/agent/test-agent-id
 ```
 
 ---
 
-## 🧪 **STEP 6: VERIFICATION**
+## ?? **STEP 7: POST-DEPLOYMENT TASKS**
 
-### **6.1 Check Health Endpoints**
+### **7.1 Logging & Monitoring**
 ```bash
-# Test control plane
-curl https://vibesdk-control-plane-2886014379.us-central1.run.app/health
-
-# Check logs
-gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=vibesdk-control-plane" \
-  --limit 50 --project qfxcloud-app-builder
+gcloud logs read --project=qfxcloud-app-builder --limit=50
 ```
 
-### **6.2 Test Database Connection**
+### **7.2 Rate Limiting (Optional)**
+Adjust `runtime_env` in `terraform.tfvars` to tune rate limiter settings.
+
+### **7.3 Monitoring Dashboards**
+Set up alerts and dashboards in **Cloud Monitoring** for:
+- Cloud Run request latency
+- Cloud SQL CPU/connection utilisation
+- Pub/Sub delivery failures
+
+---
+
+## ??? **STEP 8: OPERATIONS CHECKLIST**
+- [ ] Rotate secrets regularly
+- [ ] Backup Cloud SQL on schedule
+- [ ] Monitor Pub/Sub queue depth
+- [ ] Review Cloud Run revisions after each deploy
+- [ ] Audit IAM roles monthly
+
+---
+
+## ?? **STEP 9: MANUAL RUNBOOK**
+
+### **9.1 Trigger Agent Generation (Manual Test)**
 ```bash
-gcloud run exec vibesdk-control-plane --region us-central1 \
-  --command "pg_isready -h /cloudsql/qfxcloud-app-builder:us-central1:vibesdk-sql"
+curl -X POST https://vibesdk-control-plane-2886014379.us-central1.run.app/api/agent \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <JWT_TOKEN>" \
+  -d '{"query":"Create a sample React todo app"}'
 ```
 
-### **6.3 Test Application Features**
+### **9.2 Static Asset Verification**
 ```bash
-# Test API health
-curl https://vibesdk-control-plane-2886014379.us-central1.run.app/api/health
+curl https://vibesdk-control-plane-2886014379.us-central1.run.app/assets/index-<hash>.js
+```
 
-# Test authentication
+### **9.3 WebSocket Connection Test**
+Use browser DevTools or `wscat`:
+```bash
+wscat -c wss://vibesdk-control-plane-2886014379.us-central1.run.app/api/agent/<agent-id>/ws
+```
+
+---
+
+## ?? **COMMON COMMANDS**
+```bash
+# View Cloud Run services
+gcloud run services list --project=qfxcloud-app-builder --region=us-central1
+
+# Tail Cloud Run logs
+gcloud run services logs read vibesdk-control-plane --project=qfxcloud-app-builder --region=us-central1 --stream
+
+# Describe Cloud SQL instance
+gcloud sql instances describe vibesdk-sql --project=qfxcloud-app-builder
+```
+
+---
+
+## ?? **FRONTEND VALIDATION**
+- Deploy the frontend build to Cloud Storage bucket `vibesdk-frontend`.
+- Ensure CDN or Cloud Run static serving points to the correct bucket.
+- Verify environment variables in the frontend `.env` match backend endpoints.
+
+---
+
+## ?? **API SMOKE TESTS**
+```bash
+# Check authentication
 curl -X POST https://vibesdk-control-plane-2886014379.us-central1.run.app/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"testpass","name":"Test User"}'
@@ -244,7 +362,7 @@ curl -X POST https://vibesdk-control-plane-2886014379.us-central1.run.app/api/au
 
 ---
 
-## 🔧 **CRITICAL ENVIRONMENT VARIABLES (MUST BE SET)**
+## ?? **CRITICAL ENVIRONMENT VARIABLES (MUST BE SET)**
 
 ### **Required for Basic Operation:**
 ```bash
@@ -292,7 +410,7 @@ WEBHOOK_SECRET=random-webhook-secret
 
 ---
 
-## 🚨 **TROUBLESHOOTING**
+## ?? **TROUBLESHOOTING**
 
 ### **Common Issues:**
 
@@ -333,7 +451,7 @@ gcloud projects get-iam-policy qfxcloud-app-builder --flatten="bindings[].member
 
 ---
 
-## 📊 **COST ESTIMATION**
+## ?? **COST ESTIMATION**
 
 **Monthly Cost Breakdown:**
 - **Cloud Run (2 services)**: $35-70/month
@@ -344,7 +462,7 @@ gcloud projects get-iam-policy qfxcloud-app-builder --flatten="bindings[].member
 
 **Total Estimated Monthly Cost: $56-118**
 
-**💡 Production Considerations:**
+**?? Production Considerations:**
 - Enable Cloud SQL high availability
 - Set up monitoring with Cloud Monitoring
 - Configure proper backup schedules
@@ -353,7 +471,7 @@ gcloud projects get-iam-policy qfxcloud-app-builder --flatten="bindings[].member
 
 ---
 
-## 🔐 **SECURITY NOTES**
+## ?? **SECURITY NOTES**
 
 1. **Database**: Private IP only, no public access
 2. **Secrets**: All sensitive data in Secret Manager
@@ -363,4 +481,4 @@ gcloud projects get-iam-policy qfxcloud-app-builder --flatten="bindings[].member
 
 ---
 
-**🚀 Happy Deploying! Start with Step 1 and follow the sequence carefully.**
+**?? Happy Deploying! Start with Step 1 and follow the sequence carefully.**

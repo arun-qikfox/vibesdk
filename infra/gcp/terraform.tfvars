@@ -4,7 +4,7 @@ preview_domain         = "ai.qikfox.com"
 preview_dns_zone_name  = "ai-qikfox-preview"
 enable_preview_ingress = false
 
-runtime_image        = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/workerd:deploy-20251027-195013"
+runtime_image        = "us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/control-plane:latest"
 runtime_service_name = "vibesdk-control-plane"
 
 templates_bucket_name     = "vibesdk-templates"

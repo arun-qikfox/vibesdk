@@ -17,7 +17,26 @@ These items **must** be consulted before resuming work on Strategy B. Update the
 | P1 | Replace stub agent loader with Node-compatible shim that resolves `cloudflare:` imports without breaking WebSocket/agent flow | blocked | - | 2025-02-17 | Current attempt via `gcp-agent-manager.js` hits `ERR_INTERNAL_ASSERTION` when loading `agents` package; need deterministic shim or bundled worker artifact. |
 | P2 | Restore Cloudflare-equivalent agent bootstrap loop (single template load → blueprint → phase execution) | blocked | - | 2025-02-17 | Agents API currently loops template fetch twice and drops WebSocket after `ERR_EMPTY_RESPONSE`; fix depends on P1. |
 | P3 | Verify WebSocket handshake + streaming mirror Cloudflare sequence (NDJSON + WS events) once P1/P2 land | pending | - | - | Execute full Step-by-Step flow in description; log verification results in `strategy-b-implementation-status.md`. |
-| P4 | Run the existing worker bundle inside Cloud Run (no other Cloudflare deps) as interim solution | not-started | - | 2025-02-17 | Build worker bundle → package Docker image → deploy via Terraform Cloud Run module → attach service account with Storage/Firestore roles → expose `/api/agent` + WebSocket; document exact commands. |
+| P4 | Run combined Hono API + Vite frontend container on Cloud Run (replace workerd runtime) | in-progress | Codex | 2025-02-17 | Dockerfile updated to build/control-plane image (`container/Dockerfile.workerd`); needs image build & push → Terraform apply with `runtime_image=.../control-plane:latest` → verify WebSocket + SPA fallback. |
+
+### Cloud Run Control Plane Deployment Checklist (2025-02-17)
+
+1. **Build & tag the image**  
+   `docker build -f container/Dockerfile.workerd -t us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/control-plane:$(git rev-parse --short HEAD) .`
+2. **Push to Artifact Registry**  
+   `docker push us-central1-docker.pkg.dev/qfxcloud-app-builder/vibesdk/control-plane:$(git rev-parse --short HEAD)`
+3. **Update Terraform runtime image**  
+   - Set `runtime_image` in `infra/gcp/terraform.tfvars` to the pushed tag or digest.  
+   - Run `terraform -chdir=infra/gcp plan` to confirm no unexpected drift.
+4. **Deploy**  
+   `terraform -chdir=infra/gcp apply`
+5. **Smoke test Cloud Run service**  
+   - `curl https://$CONTROL_PLANE_URL/health`  
+   - `curl https://$CONTROL_PLANE_URL/api/health`
+6. **Verify agentic flow**  
+   - Open the Cloud Run URL (SPA served by Hono) and login.  
+   - Confirm `/api/agent` POST streams NDJSON; watch for WebSocket upgrade on `/api/agent/:id/ws` via browser dev tools.  
+   - Capture logs via `gcloud run services logs read vibesdk-control-plane --project qfxcloud-app-builder`.
 
 ## Migration Progress Tracker
 

@@ -175,15 +175,25 @@ class GCPCodingAgentController extends BaseController {
 
             const { readable, writable } = new TransformStream({
                 transform(chunk, controller) {
-                    if (chunk === "terminate") {
+                    if (chunk === 'terminate') {
                         controller.terminate();
                     } else {
                         const encoded = new TextEncoder().encode(JSON.stringify(chunk) + '\n');
                         controller.enqueue(encoded);
                     }
-                }
+                },
             });
             const writer = writable.getWriter();
+
+            const response = new Response(readable, {
+                status: 200,
+                headers: {
+                    'Content-Type': 'text/event-stream; charset=utf-8',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate, no-transform',
+                    Pragma: 'no-cache',
+                    Connection: 'keep-alive',
+                },
+            });
 
             // Create agent first
             const agentEntry = await agentManager.ensureAgent(agentId, env);
@@ -206,78 +216,84 @@ class GCPCodingAgentController extends BaseController {
                 enableFastSmartCodeFix: false
             };
 
-            // Send initial response with connection info
-            await writer.write({
-                message: 'Code generation started',
-                agentId,
-                websocketUrl,
-                httpStatusUrl,
-                template: {
-                    name: templateDetails.name,
-                    files: templateDetails.files
+            (async () => {
+                try {
+                    await writer.write({
+                        message: 'Code generation started',
+                        agentId,
+                        websocketUrl,
+                        httpStatusUrl,
+                        template: {
+                            name: templateDetails.name,
+                            files: templateDetails.files,
+                        },
+                    });
+
+                    logger.info(`Starting agent initialization for ${agentId}`);
+
+                    let initResult;
+                    try {
+                        initResult = await agent.initialize(
+                            {
+                                query,
+                                language: body.language || 'typescript',
+                                frameworks: body.frameworks || ['react', 'vite'],
+                                hostname,
+                                inferenceContext,
+                                images: uploadedImages,
+                                onBlueprintChunk: (chunk) => {
+                                    logger.debug(`Sending blueprint chunk for agent ${agentId}`, {
+                                        chunkLength: chunk.length,
+                                    });
+                                    writer.write({ chunk }).catch((err) =>
+                                        logger.error(`Failed to stream blueprint chunk for ${agentId}`, err),
+                                    );
+                                },
+                                templateInfo: { templateDetails, selection },
+                                sandboxSessionId,
+                            },
+                            body.agentMode || 'deterministic',
+                        );
+
+                        logger.info(`Agent ${agentId} initialization completed successfully`, {
+                            hasBlueprint: !!initResult?.blueprint,
+                            blueprintTitle: initResult?.blueprint?.title,
+                        });
+
+                        await writer.write({
+                            type: 'complete',
+                            message: 'Blueprint generation completed',
+                            blueprint: initResult?.blueprint,
+                        });
+                    } catch (initError) {
+                        logger.error(`Agent ${agentId} initialization failed`, initError);
+                        await writer.write({
+                            type: 'error',
+                            message:
+                                initError instanceof Error ? initError.message : 'Initialization failed',
+                            error: initError instanceof Error ? initError.message : String(initError),
+                        });
+                    }
+                } catch (streamError) {
+                    logger.error(`Failed during initial stream setup for ${agentId}`, streamError);
+                } finally {
+                    try {
+                        await writer.write('terminate');
+                    } catch (terminateError) {
+                        logger.error(`Failed to enqueue terminate sentinel for ${agentId}`, terminateError);
+                    }
+                    try {
+                        await writer.close();
+                        logger.info(`Agent ${agentId} initialization stream closed successfully`);
+                    } catch (closeError) {
+                        logger.error(`Failed to close initialization stream for ${agentId}`, closeError);
+                    }
                 }
+            })().catch((unhandledError) => {
+                logger.error(`Unhandled initialization error for agent ${agentId}`, unhandledError);
             });
 
-            logger.info(`Starting agent initialization for ${agentId}`);
-
-            try {
-                // Initialize agent and wait for completion
-                const initResult = await agent.initialize({
-                    query,
-                    language: body.language || 'typescript',
-                    frameworks: body.frameworks || ['react', 'vite'],
-                    hostname,
-                    inferenceContext,
-                    images: uploadedImages,
-                    onBlueprintChunk: (chunk) => {
-                        logger.debug(`Sending blueprint chunk for agent ${agentId}`, { chunkLength: chunk.length });
-                        writer.write({ chunk });
-                    },
-                    templateInfo: { templateDetails, selection },
-                    sandboxSessionId
-                }, body.agentMode || 'deterministic');
-
-                logger.info(`Agent ${agentId} initialization completed successfully`, {
-                    hasBlueprint: !!initResult?.blueprint,
-                    blueprintTitle: initResult?.blueprint?.title
-                });
-
-                // Send completion message
-                await writer.write({
-                    type: 'complete',
-                    message: 'Blueprint generation completed',
-                    blueprint: initResult?.blueprint
-                });
-
-            } catch (initError) {
-                logger.error(`Agent ${agentId} initialization failed`, initError);
-
-                // Send error message but don't terminate stream yet
-                await writer.write({
-                    type: 'error',
-                    message: initError instanceof Error ? initError.message : 'Initialization failed',
-                    error: initError instanceof Error ? initError.message : String(initError)
-                });
-            }
-
-            // Always terminate the stream properly
-            try {
-                await writer.write("terminate");
-                await writer.close();
-                logger.info(`Agent ${agentId} initialization stream closed successfully`);
-            } catch (streamError) {
-                logger.error(`Failed to close initialization stream for ${agentId}`, streamError);
-            }
-
-            return new Response(readable, {
-                status: 200,
-                headers: {
-                    'Content-Type': 'text/event-stream; charset=utf-8',
-                    'Cache-Control': 'no-cache, no-store, must-revalidate, no-transform',
-                    'Pragma': 'no-cache',
-                    'Connection': 'keep-alive'
-                }
-            });
+            return response;
 
         } catch (error) {
             logger.error('Error starting GCP code generation', {

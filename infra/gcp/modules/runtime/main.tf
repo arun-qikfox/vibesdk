@@ -42,6 +42,10 @@ resource "google_cloud_run_v2_service" "this" {
     containers {
       image = var.image
 
+      ports {
+        container_port = 8080
+      }
+
       dynamic "env" {
         for_each = local.plain_env
         content {
