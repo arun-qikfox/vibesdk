@@ -67,7 +67,12 @@ interface InstanceMetadata {
     redacted_files: string[];
 }
 
-type SandboxType = DurableObjectStub<Sandbox<Env>>;
+type SandboxType = DurableObjectStub<Sandbox<Env>> & {
+    // Sandbox-specific methods that are always available
+    exec: (command: string, options?: any) => Promise<ExecuteResponse>;
+    writeFile: (path: string, content: string) => Promise<void>;
+    readFile: (path: string) => Promise<{ success: boolean; content?: string }>;
+};
 
 /**
  * Streaming event for enhanced command execution
@@ -1854,7 +1859,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             this.logger.info('Reading worker script');
             const workerPath = `${instanceId}/dist/index.js`;
             const workerFile = await sandbox.readFile(workerPath);
-            if (!workerFile.success) {
+            if (!workerFile.success || !workerFile.content) {
                 throw new Error(`Worker script not found at ${workerPath}. Please build the project first.`);
             }
             
