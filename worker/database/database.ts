@@ -37,9 +37,12 @@ export class DatabaseService {
     private readonly enableReplicas: boolean;
 
     constructor(env: Env) {
+        // Cast to unknown first, then to our custom D1Database type for internal use
         const instrumented = Sentry.instrumentD1WithSentry(env.DB) as unknown as D1Database;
         this.d1 = instrumented;
-        this.db = drizzle(instrumented, { schema });
+        // Cast back to official D1Database type for drizzle (which expects @cloudflare/workers-types D1Database)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        this.db = drizzle(instrumented as any, { schema });
         this.enableReplicas = env.ENABLE_READ_REPLICAS === 'true';
     }
 

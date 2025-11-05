@@ -242,7 +242,7 @@ export class CodingAgentController extends BaseController {
                 return new Response(null, {
                     status: 101,
                     webSocket: client
-                });
+                } as ResponseInit);
             }
         } catch (error) {
             this.logger.error('Error handling WebSocket connection', error);
