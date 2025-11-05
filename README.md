@@ -466,6 +466,189 @@ Want to contribute to Cloudflare VibeSDK? Here's how:
 
 ---
 
+## 🚀 Google App Engine Deployment
+
+Cloudflare VibeSDK now supports deploying generated applications to **Google App Engine (GAE)** in addition to Cloudflare Workers. This enables you to deploy platform-independent frontend applications to GCP.
+
+### 🔑 Required Environment Variables
+
+To enable GCP App Engine deployment, you need to configure the following environment variables:
+
+#### Required Variables
+
+**`GOOGLE_CLOUD_PROJECT_ID`** (Required)
+- Your Google Cloud Project ID
+- Example: `my-awesome-project-123456`
+- Where to find it: [Google Cloud Console](https://console.cloud.google.com) → Project Settings → Project ID
+
+**`GOOGLE_SERVICE_ACCOUNT_KEY`** (Required)
+- Base64-encoded JSON service account key file
+- Must have App Engine Admin and Cloud Storage Admin permissions
+- Format: Base64-encoded JSON string
+
+**`DEFAULT_DEPLOYMENT_TARGET`** (Optional)
+- Default deployment target for generated applications
+- Values: `'cloudflare'` or `'app_engine'`
+- Default: `'app_engine'` (if not set)
+
+### 📋 Setup Instructions
+
+#### Step 1: Create a Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a new project or select an existing one
+3. Note your **Project ID** (not Project Name)
+
+#### Step 2: Enable App Engine API
+
+1. In your project, go to **APIs & Services** → **Library**
+2. Search for "App Engine Admin API"
+3. Click **Enable**
+
+#### Step 3: Create a Service Account
+
+1. Go to **IAM & Admin** → **Service Accounts**
+2. Click **Create Service Account**
+3. Provide a name (e.g., `vibesdk-deployer`)
+4. Click **Create and Continue**
+
+#### Step 4: Grant Required Permissions
+
+Grant the following roles to your service account:
+- **App Engine Admin** (`roles/appengine.admin`)
+- **Cloud Storage Admin** (`roles/storage.admin`) - For static file deployment
+- **Service Account User** (`roles/iam.serviceAccountUser`) - For authentication
+
+#### Step 5: Create and Download Service Account Key
+
+1. Select your service account
+2. Go to the **Keys** tab
+3. Click **Add Key** → **Create new key**
+4. Choose **JSON** format
+5. Download the JSON key file
+
+#### Step 6: Encode the Service Account Key
+
+The service account key must be base64-encoded before being set as an environment variable:
+
+**On Linux/macOS:**
+```bash
+cat path/to/service-account-key.json | base64 -w 0
+```
+
+**On Windows (PowerShell):**
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("path\to\service-account-key.json"))
+```
+
+**On macOS (using base64):**
+```bash
+base64 -i path/to/service-account-key.json -o - | tr -d '\n'
+```
+
+#### Step 7: Configure Environment Variables
+
+Add these variables to your deployment configuration:
+
+**For Cloudflare Workers (via wrangler.jsonc or secrets):**
+```json
+{
+  "vars": {
+    "GOOGLE_CLOUD_PROJECT_ID": "your-project-id",
+    "DEFAULT_DEPLOYMENT_TARGET": "app_engine"
+  }
+}
+```
+
+**Set as Worker Secret (for sensitive data):**
+```bash
+# Set GOOGLE_SERVICE_ACCOUNT_KEY as a secret (base64-encoded JSON)
+wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
+# Paste the base64-encoded service account key when prompted
+```
+
+**For Local Development (.dev.vars):**
+```bash
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_SERVICE_ACCOUNT_KEY=<base64-encoded-json-key>
+DEFAULT_DEPLOYMENT_TARGET=app_engine
+```
+
+**For Production (.prod.vars):**
+```bash
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_SERVICE_ACCOUNT_KEY=<base64-encoded-json-key>
+DEFAULT_DEPLOYMENT_TARGET=app_engine
+```
+
+### 🎯 How It Works
+
+When you deploy an application:
+
+1. **Frontend Build**: The generated frontend application is built using `npm run build`
+2. **Static Files**: Static files are collected from the `dist` directory
+3. **App Engine Config**: An `app.yaml` configuration file is automatically generated
+4. **Authentication**: The service account key is used to authenticate with Google Cloud
+5. **Deployment**: The application is deployed to App Engine using `gcloud` CLI
+6. **URL**: The deployed application URL is returned and displayed in the UI
+
+### 📝 App Engine Configuration
+
+The deployment automatically generates an `app.yaml` file for static site hosting:
+
+```yaml
+runtime: python27
+api_version: 1
+threadsafe: true
+
+handlers:
+- url: /
+  static_files: dist/index.html
+  upload: dist/index.html
+  expiration: 0s
+
+- url: /(.*)
+  static_files: dist/\1
+  upload: dist/(.*)
+```
+
+### 🔒 Security Best Practices
+
+- **Never commit** service account keys to version control
+- **Use Worker Secrets** for `GOOGLE_SERVICE_ACCOUNT_KEY` in production
+- **Rotate keys regularly** and revoke old keys
+- **Limit permissions** to only what's needed (App Engine Admin, Storage Admin)
+- **Use separate service accounts** for development and production
+
+### 🐛 Troubleshooting
+
+**Error: "GOOGLE_CLOUD_PROJECT_ID and GOOGLE_SERVICE_ACCOUNT_KEY must be set"**
+- Verify both environment variables are set correctly
+- Check that `GOOGLE_SERVICE_ACCOUNT_KEY` is base64-encoded
+- Ensure the service account key JSON is valid
+
+**Error: "Failed to authenticate gcloud"**
+- Verify the service account key is correctly base64-encoded
+- Check that the key has not expired or been revoked
+- Ensure the key has the required permissions
+
+**Error: "App Engine API not enabled"**
+- Enable the App Engine Admin API in your Google Cloud project
+- Wait a few minutes for the API to be fully enabled
+
+**Error: "Insufficient permissions"**
+- Verify the service account has App Engine Admin role
+- Check that Cloud Storage Admin role is granted
+- Ensure Service Account User role is assigned
+
+### 📚 Additional Resources
+
+- [Google App Engine Documentation](https://cloud.google.com/appengine/docs)
+- [Service Account Authentication](https://cloud.google.com/docs/authentication/service-accounts)
+- [App Engine Static File Hosting](https://cloud.google.com/appengine/docs/standard/python/serving-static-files)
+
+---
+
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.

@@ -2054,13 +2054,20 @@ export class SandboxSdkClient extends BaseSandboxService {
             // Note: staticFiles variable is kept for future use but not currently needed for gcloud deployment
             await this.readStaticFilesFromSandbox(distPath);
 
-            // Step 3: Generate app.yaml for static site
-            const appYaml = this.generateStaticAppYaml(projectName);
+            // Step 3: Generate short service name for App Engine (to avoid domain size limitations)
+            const shortServiceName = await this.generateShortServiceName(projectName);
+            this.logger.info('Generated short service name', { 
+                originalName: projectName, 
+                shortName: shortServiceName 
+            });
 
-            // Step 4: Write app.yaml to sandbox root
+            // Step 4: Generate app.yaml for static site
+            const appYaml = await this.generateStaticAppYaml(shortServiceName);
+
+            // Step 5: Write app.yaml to sandbox root
             await sandbox.writeFile(`${instanceId}/app.yaml`, appYaml);
 
-            // Step 5: Authenticate gcloud with service account key
+            // Step 6: Authenticate gcloud with service account key
             // Write service account key to a temporary file
             const keyPath = `.gcloud-key.json`;
             const serviceAccountJson = Buffer.from(serviceAccountKey, 'base64').toString('utf8');
@@ -2086,8 +2093,8 @@ export class SandboxSdkClient extends BaseSandboxService {
                 throw new Error(`App Engine deployment failed: ${deployResult.stderr}`);
             }
 
-            // Step 7: Get deployment URL
-            const deployedUrl = `https://${projectName}.${projectId}.appspot.com`;
+            // Step 7: Get deployment URL (use short service name)
+            const deployedUrl = `https://${shortServiceName}.${projectId}.appspot.com`;
             const versionId = `v${Date.now()}`;
 
             // Clean up service account key file
@@ -2146,11 +2153,47 @@ export class SandboxSdkClient extends BaseSandboxService {
     }
 
     /**
+     * Generate a short, unique App Engine service name from a project name
+     * Ensures the name is within App Engine's 63-character limit and maintains uniqueness
+     * 
+     * @param appName - Original project/app name
+     * @returns Shortened service name suitable for App Engine (e.g., "app-a1b2c3d4")
+     */
+    private async generateShortServiceName(appName: string): Promise<string> {
+        // Normalize the name: lowercase, replace invalid chars with hyphens
+        const normalized = appName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+        
+        // Extract prefix (first part before hyphen, or first 10 chars if no hyphen)
+        // Ensure we have at least 3 chars for readability
+        let prefix = normalized.includes('-') 
+            ? normalized.split('-')[0].slice(0, 10)
+            : normalized.slice(0, 10);
+        
+        // If prefix is empty or too short, use a default
+        if (!prefix || prefix.length < 3) {
+            prefix = 'app'; // Default prefix
+        }
+        
+        // Generate SHA-256 hash and take first 8 hex characters for uniqueness
+        const encoder = new TextEncoder();
+        const data = encoder.encode(appName);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 8);
+        
+        // Combine prefix and hash: "prefix-hash" (max ~18 chars, well under 63 limit)
+        const shortName = `${prefix}-${hashHex}`;
+        
+        // Ensure it doesn't exceed App Engine's limit (63 chars) and is valid
+        return shortName.slice(0, 63).replace(/^[-]+|[-]+$/g, ''); // Remove leading/trailing hyphens
+    }
+
+    /**
      * Generate app.yaml for static frontend deployment
      */
-    private generateStaticAppYaml(appName: string): string {
+    private async generateStaticAppYaml(shortServiceName: string): Promise<string> {
         return `runtime: nodejs20
-service: ${appName}
+service: ${shortServiceName}
 instance_class: F1
 automatic_scaling:
   min_instances: 0
