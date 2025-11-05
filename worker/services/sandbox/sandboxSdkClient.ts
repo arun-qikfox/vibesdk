@@ -472,7 +472,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             const instances: InstanceDetails[] = [];
             
             // Parse the combined output
-            const sections = bulkResult.stdout.split('===FILE:').filter(section => section.trim());
+            const sections = bulkResult.stdout.split('===FILE:').filter((section: string) => section.trim());
             
             for (const section of sections) {
                 try {
@@ -1303,7 +1303,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 // Read '.important_files.json' in instance directory
                 const importantFiles = await sandbox.exec(`cd ${templateOrInstanceId} && jq -r '.[]' .important_files.json | while read -r path; do if [ -d "$path" ]; then find "$path" -type f; elif [ -f "$path" ]; then echo "$path"; fi; done`);
                 this.logger.info(`Read important files: stdout: ${importantFiles.stdout}, stderr: ${importantFiles.stderr}`);
-                filePaths = importantFiles.stdout.split('\n').filter(path => path);
+                filePaths = importantFiles.stdout.split('\n').filter((path: string) => path);
                 if (!filePaths) {
                     return {
                         success: false,
@@ -1875,7 +1875,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     // Find all JS files in the worker assets directory
                     const findResult = await sandbox.exec(`find ${workerAssetsPath} -type f -name "*.js"`);
                     if (findResult.exitCode === 0) {
-                        const modulePaths = findResult.stdout.trim().split('\n').filter(path => path);
+                        const modulePaths = findResult.stdout.trim().split('\n').filter((path: string) => path);
                         
                         if (modulePaths.length > 0) {
                             additionalModules = new Map<string, string>();
@@ -2021,7 +2021,8 @@ export class SandboxSdkClient extends BaseSandboxService {
             // Step 2: Read static files from dist directory
             this.logger.info('Reading static files');
             const distPath = `${instanceId}/dist`;
-            const staticFiles = await this.readStaticFilesFromSandbox(distPath);
+            // Note: staticFiles variable is kept for future use but not currently needed for gcloud deployment
+            await this.readStaticFilesFromSandbox(distPath);
 
             // Step 3: Generate app.yaml for static site
             const appYaml = this.generateStaticAppYaml(projectName);
@@ -2098,7 +2099,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             throw new Error(`Failed to list dist files: ${listResult.stderr}`);
         }
 
-        const filePaths = listResult.stdout.trim().split('\n').filter(path => path);
+        const filePaths = listResult.stdout.trim().split('\n').filter((path: string) => path);
 
         for (const fullPath of filePaths) {
             const relativePath = fullPath.replace(`${distPath}/`, '');
@@ -2151,7 +2152,7 @@ env_variables:
             throw new Error(`Failed to list assets: ${findResult.stderr}`);
         }
         
-        const filePaths = findResult.stdout.trim().split('\n').filter(path => path);
+        const filePaths = findResult.stdout.trim().split('\n').filter((path: string) => path);
         this.logger.info('Asset files found', { count: filePaths.length });
         
         const fileContents = new Map<string, Buffer>();

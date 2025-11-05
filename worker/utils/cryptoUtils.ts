@@ -43,7 +43,17 @@ export async function timingSafeEqual(a: string, b: string): Promise<boolean> {
         return false;
     }
     
-    return crypto.subtle.timingSafeEqual(aBuffer, bBuffer);
+    // Check if timingSafeEqual is available (Cloudflare Workers compatibility)
+    if ('timingSafeEqual' in crypto.subtle && typeof (crypto.subtle as any).timingSafeEqual === 'function') {
+        return (crypto.subtle as any).timingSafeEqual(aBuffer, bBuffer);
+    }
+    
+    // Fallback: use constant-time comparison
+    let result = 0;
+    for (let i = 0; i < aBuffer.length; i++) {
+        result |= aBuffer[i] ^ bBuffer[i];
+    }
+    return result === 0;
 }
 
 export function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
@@ -51,7 +61,17 @@ export function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
         return false;
     }
     
-    return crypto.subtle.timingSafeEqual(a, b);
+    // Check if timingSafeEqual is available (Cloudflare Workers compatibility)
+    if ('timingSafeEqual' in crypto.subtle && typeof (crypto.subtle as any).timingSafeEqual === 'function') {
+        return (crypto.subtle as any).timingSafeEqual(a, b);
+    }
+    
+    // Fallback: use constant-time comparison
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+        result |= a[i] ^ b[i];
+    }
+    return result === 0;
 }
 
 export function generateSecureToken(length: number = 32): string {
