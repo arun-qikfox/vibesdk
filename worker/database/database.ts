@@ -33,17 +33,16 @@ export type {
  */
 export class DatabaseService {
     public readonly db: DrizzleD1Database<typeof schema>;
-    // Use the official D1Database type from @cloudflare/workers-types (via env.DB)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private readonly d1: any; // Store as any to avoid type conflicts between custom and official types
+    private readonly d1: D1Database;
     private readonly enableReplicas: boolean;
 
     constructor(env: Env) {
-        // Use Sentry's instrumented D1Database directly (returns official @cloudflare/workers-types D1Database)
         const instrumented = Sentry.instrumentD1WithSentry(env.DB);
         this.d1 = instrumented;
-        // Pass directly to drizzle which expects the official @cloudflare/workers-types D1Database type
-        this.db = drizzle(instrumented, { schema });
+        // Cast to any to avoid type conflict between custom D1Database and @cloudflare/workers-types D1Database
+        // drizzle expects @cloudflare/workers-types D1Database, but env.DB is typed as our custom D1Database
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        this.db = drizzle(instrumented as any, { schema });
         this.enableReplicas = env.ENABLE_READ_REPLICAS === 'true';
     }
 
@@ -64,8 +63,10 @@ export class DatabaseService {
 
         const sessionType = strategy === 'fresh' ? 'first-primary' : 'first-unconstrained';
         const session = this.d1.withSession(sessionType);
-        // Pass session directly to drizzle (it expects the official @cloudflare/workers-types D1DatabaseSession type)
-        return drizzle(session, { schema });
+        // D1DatabaseSession is compatible with D1Database for Drizzle operations
+        // Cast to any to avoid type conflict - drizzle accepts the session type from @cloudflare/workers-types
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return drizzle(session as any, { schema });
     }
 
     // ========================================
