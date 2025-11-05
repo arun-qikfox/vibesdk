@@ -189,6 +189,9 @@ export class SandboxSdkClient extends BaseSandboxService {
         // Cache miss - read from disk
         try {
             const metadataFile = await this.getSandbox().readFile(this.getInstanceMetadataFile(instanceId));
+            if (!metadataFile.success || !metadataFile.content) {
+                throw new Error('Failed to read instance metadata file');
+            }
             const metadata = JSON.parse(metadataFile.content) as InstanceMetadata;
             this.metadataCache.set(instanceId, metadata); // Cache it
             return metadata;
@@ -716,16 +719,15 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             // Update wrangler.jsonc if we have replacements
             let wranglerUpdated = false;
-            if (Object.keys(replacements).length > 0) {
+            if (Object.keys(replacements).length > 0 && wranglerFile.content) {
                 const updatedContent = templateParser.replacePlaceholders(wranglerFile.content, replacements);
-                const writeResult = await sandbox.writeFile(`${instanceId}/wrangler.jsonc`, updatedContent);
-                
-                if (writeResult.success) {
+                try {
+                    await sandbox.writeFile(`${instanceId}/wrangler.jsonc`, updatedContent);
                     wranglerUpdated = true;
                     this.logger.info(`Updated wrangler.jsonc with ${Object.keys(replacements).length} resource IDs for ${instanceId}`);
                     this.logger.info(templateParser.createReplacementSummary(replacements));
-                } else {
-                    this.logger.error(`Failed to update wrangler.jsonc for ${instanceId}`);
+                } catch (error) {
+                    this.logger.error(`Failed to update wrangler.jsonc for ${instanceId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
                 }
             }
 

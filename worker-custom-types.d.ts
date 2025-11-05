@@ -7,6 +7,7 @@
  * 2. Required for the application to compile correctly
  * 3. Custom extensions to Cloudflare Workers APIs
  * 
+ * Note: This file extends/complements @cloudflare/workers-types, not replaces it.
  * DO NOT REGENERATE THIS FILE - It is manually maintained.
  * When wrangler types is regenerated, this file remains intact.
  */
@@ -47,10 +48,11 @@ type DurableObjectID = string | { id: string; name: string };
 type DurableObjectJurisdiction = 'eu' | 'fedramp' | undefined;
 
 // Cloudflare Workers ExecutionContext type
+// Extends the base ExecutionContext to include Hono's required props
 interface ExecutionContext {
 	waitUntil(promise: Promise<any>): void;
 	passThroughOnException(): void;
-	// Additional props that may be required by some frameworks (e.g., Hono)
+	// Hono requires props to be present (not optional)
 	props?: Record<string, any>;
 }
 
@@ -89,24 +91,6 @@ interface KVNamespaceListKey<T = unknown> {
 	metadata?: T;
 }
 
-// Cloudflare Workers KVNamespace type (extended with list method return type)
-interface KVNamespace {
-	get(key: string): Promise<string | null>;
-	get(key: string, type: 'text'): Promise<string | null>;
-	get(key: string, type: 'json'): Promise<any>;
-	get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>;
-	get(key: string, type: 'stream'): Promise<ReadableStream | null>;
-	put(key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream): Promise<void>;
-	put(key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: KVNamespacePutOptions): Promise<void>;
-	delete(key: string): Promise<void>;
-	list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<KVNamespaceListResult>;
-}
-
-// Cloudflare Workers RateLimit type
-interface RateLimit {
-	limit(options: { key: string; limit?: number; period?: number }): Promise<{ success: boolean; limit?: number; remaining?: number; reset?: number }>;
-}
-
 // Cloudflare Workers WebSocketPair type
 // WebSocketPair is a constructor function, not just a type
 declare const WebSocketPair: {
@@ -116,6 +100,19 @@ declare const WebSocketPair: {
 interface WebSocketPair {
 	0: WebSocket;
 	1: WebSocket;
+}
+
+// Extend WebSocket interface to include Cloudflare Workers specific methods
+interface WebSocket {
+	accept(): void;
+	send(message: string | ArrayBuffer | ArrayBufferView): void;
+	close(code?: number, reason?: string): void;
+	addEventListener(type: string, listener: EventListener): void;
+	removeEventListener(type: string, listener: EventListener): void;
+	readonly readyState: number;
+	readonly url: string;
+	readonly protocol: string;
+	readonly extensions: string;
 }
 
 // Cloudflare Workers DurableObject base class
@@ -162,6 +159,7 @@ interface DurableObjectTransaction {
 }
 
 // ResponseInit with webSocket support (Cloudflare Workers extension)
+// This extends the standard ResponseInit interface
 interface ResponseInit {
 	status?: number;
 	statusText?: string;
@@ -173,11 +171,13 @@ interface ResponseInit {
 type HeadersInit = Headers | string[][] | Record<string, string>;
 
 // D1Database type (Cloudflare D1 Database)
+// Note: This extends @cloudflare/workers-types D1Database to add missing methods
 interface D1Database {
 	prepare(query: string): D1PreparedStatement;
 	exec(query: string): Promise<D1ExecResult>;
 	batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
 	withSession(sessionType: 'first-primary' | 'first-unconstrained'): D1Database;
+	dump(): Promise<ArrayBuffer>;
 }
 
 // D1PreparedStatement type

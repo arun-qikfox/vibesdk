@@ -162,7 +162,12 @@ const worker = {
 			// Handle all API requests with the main Hono application.
 			logger.info(`Handling API request for: ${url}`);
 			const app = createApp(env);
-			return app.fetch(request, env, ctx);
+			// Hono's ExecutionContext requires props, so we ensure it's present
+			const honoCtx: ExecutionContext = {
+				...ctx,
+				props: ctx.props || {}
+			};
+			return app.fetch(request, env, honoCtx);
 		}
 
 		// Route 2: User App Request (e.g., xyz.build.cloudflare.dev or test.localhost)

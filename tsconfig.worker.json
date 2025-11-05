@@ -4,7 +4,8 @@
 		"composite": true,
 		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
 		"types": ["./worker-configuration.d.ts", "./worker-custom-types.d.ts", "vite/client", "jest"],
-		"lib": ["ES2023"]
+		"lib": ["ES2023"],
+		"skipLibCheck": true
 	},
 	"include": ["./worker-configuration.d.ts", "./worker-custom-types.d.ts", "./shared", "./worker"]
 }

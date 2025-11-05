@@ -37,7 +37,7 @@ export class DatabaseService {
     private readonly enableReplicas: boolean;
 
     constructor(env: Env) {
-        const instrumented = Sentry.instrumentD1WithSentry(env.DB);
+        const instrumented = Sentry.instrumentD1WithSentry(env.DB) as D1Database;
         this.d1 = instrumented;
         this.db = drizzle(instrumented, { schema });
         this.enableReplicas = env.ENABLE_READ_REPLICAS === 'true';
@@ -61,6 +61,7 @@ export class DatabaseService {
         const sessionType = strategy === 'fresh' ? 'first-primary' : 'first-unconstrained';
         const session = this.d1.withSession(sessionType);
         // D1DatabaseSession is compatible with D1Database for Drizzle operations
+        // Cast to D1Database to satisfy Drizzle's type requirements
         return drizzle(session as unknown as D1Database, { schema });
     }
 
