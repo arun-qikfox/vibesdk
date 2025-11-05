@@ -144,7 +144,9 @@ export class SandboxSdkClient extends BaseSandboxService {
 
     private getSandbox(): SandboxType {
         if (!this.sandbox) {
-            this.sandbox = getSandbox(env.Sandbox, this.sandboxId);
+            const stub = getSandbox(env.Sandbox, this.sandboxId) as DurableObjectStub<Sandbox<Env>>;
+            // Cast to SandboxType to ensure type compatibility
+            this.sandbox = stub as SandboxType;
         }
         return this.sandbox;
     }
@@ -869,7 +871,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             // Store wrangler.jsonc configuration in KV after resource provisioning
             try {
                 const wranglerConfigFile = await sandbox.readFile(`${instanceId}/wrangler.jsonc`);
-                if (wranglerConfigFile.success) {
+                if (wranglerConfigFile.success && wranglerConfigFile.content) {
                     await env.VibecoderStore.put(this.getWranglerKVKey(instanceId), wranglerConfigFile.content);
                     this.logger.info('Wrangler configuration stored in KV', { instanceId });
                 } else {
@@ -948,10 +950,11 @@ export class SandboxSdkClient extends BaseSandboxService {
         try {
             // Read .donttouch_files.json
             const donttouchFile = await this.getSandbox().readFile(`${templateName}/.donttouch_files.json`);
-            if (donttouchFile.exitCode !== 0) {
-                this.logger.warn(`Failed to read .donttouch_files.json: ${donttouchFile.content}`);
+            if (donttouchFile.success && donttouchFile.content) {
+                donttouchFiles = JSON.parse(donttouchFile.content) as string[];
+            } else {
+                this.logger.warn(`Failed to read .donttouch_files.json: ${donttouchFile.success ? 'empty content' : 'read failed'}`);
             }
-            donttouchFiles = JSON.parse(donttouchFile.content) as string[];
         } catch (error) {
             this.logger.warn(`Failed to read .donttouch_files.json: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
@@ -963,10 +966,11 @@ export class SandboxSdkClient extends BaseSandboxService {
         try {
             // Read .redacted_files.json
             const redactedFile = await this.getSandbox().readFile(`${templateName}/.redacted_files.json`);
-            if (redactedFile.exitCode !== 0) {
-                this.logger.warn(`Failed to read .redacted_files.json: ${redactedFile.content}`);
+            if (redactedFile.success && redactedFile.content) {
+                redactedFiles = JSON.parse(redactedFile.content) as string[];
+            } else {
+                this.logger.warn(`Failed to read .redacted_files.json: ${redactedFile.success ? 'empty content' : 'read failed'}`);
             }
-            redactedFiles = JSON.parse(redactedFile.content) as string[];
         } catch (error) {
             this.logger.warn(`Failed to read .redacted_files.json: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }

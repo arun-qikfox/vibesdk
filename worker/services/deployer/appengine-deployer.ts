@@ -20,6 +20,8 @@ export interface AppEngineDeployResult {
 export class AppEngineDeployer {
 	private readonly projectId: string;
 	// Store serviceAccountKey for potential future use (e.g., API calls)
+	// Suppress unused variable warning as it's stored for future implementation
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	private readonly serviceAccountKey: string;
 
 	constructor(projectId: string, serviceAccountKey: string) {

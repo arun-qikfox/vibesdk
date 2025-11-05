@@ -271,8 +271,12 @@ export class CodingAgentController extends BaseController {
             try {
                 // Verify the agent instance exists
                 const agentInstance = await getAgentStub(env, agentId, true, this.logger);
-                if (!agentInstance || !(await agentInstance.isInitialized())) {
+                if (!agentInstance || !agentInstance.isInitialized) {
                     return CodingAgentController.createErrorResponse<AgentConnectionData>('Agent instance not found or not initialized', 404);
+                }
+                const isInitialized = await agentInstance.isInitialized();
+                if (!isInitialized) {
+                    return CodingAgentController.createErrorResponse<AgentConnectionData>('Agent instance not initialized', 404);
                 }
                 this.logger.info(`Successfully connected to existing agent: ${agentId}`);
 
@@ -314,6 +318,10 @@ export class CodingAgentController extends BaseController {
                 // Get the agent instance
                 const agentInstance = await getAgentStub(env, agentId, true, this.logger);
                 
+                if (!agentInstance || !agentInstance.deployToSandbox) {
+                    return CodingAgentController.createErrorResponse<AgentPreviewResponse>('Agent instance not found or deployment method unavailable', 404);
+                }
+                
                 // Deploy the preview
                 const preview = await agentInstance.deployToSandbox();
                 if (!preview) {
@@ -352,6 +360,11 @@ export class CodingAgentController extends BaseController {
 
             try {
                 const agentInstance = await getAgentStub(env, agentId, true, this.logger);
+                
+                if (!agentInstance || !agentInstance.deployToAppEngine) {
+                    return CodingAgentController.createErrorResponse('Agent instance not found or deployment method unavailable', 404);
+                }
+                
                 const result = await agentInstance.deployToAppEngine();
 
                 if (result?.deploymentUrl) {

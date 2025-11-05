@@ -40,6 +40,43 @@ type DurableObjectJurisdiction = 'eu' | 'fedramp' | undefined;
 interface ExecutionContext {
 	waitUntil(promise: Promise<any>): void;
 	passThroughOnException(): void;
+	// Additional props that may be required by some frameworks
+	props?: Record<string, any>;
+}
+
+// Cloudflare Workers ExportedHandler type
+interface ExportedHandler<Env = any> {
+	fetch?: (request: Request, env: Env, ctx: ExecutionContext) => Response | Promise<Response>;
+	scheduled?: (event: ScheduledEvent, env: Env, ctx: ExecutionContext) => void | Promise<void>;
+	queue?: (batch: MessageBatch, env: Env, ctx: ExecutionContext) => void | Promise<void>;
+	tail?: (events: TailEvent[], env: Env, ctx: ExecutionContext) => void | Promise<void>;
+}
+
+// Cloudflare Workers caches global
+declare const caches: {
+	default: Cache;
+	open(cacheName: string): Promise<Cache>;
+};
+
+// KVNamespacePutOptions type
+interface KVNamespacePutOptions {
+	expirationTtl?: number;
+	expiration?: number;
+	metadata?: any;
+}
+
+// KVNamespaceListResult type
+interface KVNamespaceListResult<T = unknown> {
+	keys: KVNamespaceListKey<T>[];
+	list_complete: boolean;
+	cursor?: string;
+}
+
+// KVNamespaceListKey type
+interface KVNamespaceListKey<T = unknown> {
+	name: string;
+	expiration?: number;
+	metadata?: T;
 }
 
 // Cloudflare Workers KVNamespace type
@@ -61,6 +98,11 @@ interface RateLimit {
 }
 
 // Cloudflare Workers WebSocketPair type
+// WebSocketPair is a constructor function, not just a type
+declare const WebSocketPair: {
+    new (): WebSocketPair;
+};
+
 interface WebSocketPair {
 	0: WebSocket;
 	1: WebSocket;
@@ -68,6 +110,8 @@ interface WebSocketPair {
 
 // Cloudflare Workers DurableObject base class
 declare class DurableObject {
+	protected ctx: DurableObjectState;
+	protected env: Env;
 	constructor(ctx: DurableObjectState, env: Env);
 	fetch(request: Request): Promise<Response>;
 }
@@ -107,12 +151,54 @@ interface DurableObjectTransaction {
 	rollback(): void;
 }
 
-// ResponseInit with webSocket support
+// ResponseInit with webSocket support (Cloudflare Workers extension)
 interface ResponseInit {
 	status?: number;
 	statusText?: string;
 	headers?: HeadersInit;
 	webSocket?: WebSocket;
+}
+
+// HeadersInit type (standard Web API)
+type HeadersInit = Headers | string[][] | Record<string, string>;
+
+// D1Database type (Cloudflare D1 Database)
+interface D1Database {
+	prepare(query: string): D1PreparedStatement;
+	exec(query: string): Promise<D1ExecResult>;
+	batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+	withSession(sessionType: 'first-primary' | 'first-unconstrained'): D1Database;
+}
+
+// D1PreparedStatement type
+interface D1PreparedStatement {
+	bind(...values: unknown[]): D1PreparedStatement;
+	first<T = unknown>(colName?: string): Promise<T | null>;
+	first<T = unknown>(): Promise<T | null>;
+	run<T = unknown>(): Promise<D1Result<T>>;
+	all<T = unknown>(): Promise<D1Result<T>>;
+	raw<T = unknown>(): Promise<T[]>;
+}
+
+// D1Result type
+interface D1Result<T = unknown> {
+	success: boolean;
+	meta: {
+		changed_db: boolean;
+		changes: number;
+		duration: number;
+		last_row_id: number;
+		rows_read: number;
+		rows_written: number;
+		size_after: number;
+	};
+	results?: T[];
+}
+
+// D1ExecResult type
+interface D1ExecResult {
+	count: number;
+	duration: number;
 }
 
 // AI Gateway Providers type (for Cloudflare Workers AI Gateway)

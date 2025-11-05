@@ -63,8 +63,11 @@ export async function cloneAgent(env: Env, agentId: string, logger: StructuredLo
     const newAgentId = generateId();
 
     const newAgent = await getAgentStub(env, newAgentId, false, logger);
-    if (!newAgent || !newAgent.getFullState) {
+    if (!newAgent || !newAgent.getFullState || !newAgent.setState) {
         throw new Error(`Failed to create new agent ${newAgentId}`);
+    }
+    if (!agentInstance || !agentInstance.getFullState) {
+        throw new Error(`Failed to get original agent state ${agentId}`);
     }
     const originalState = await agentInstance.getFullState() as CodeGenState;
     const newState = {

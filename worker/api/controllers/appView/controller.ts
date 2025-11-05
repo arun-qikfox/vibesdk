@@ -56,9 +56,13 @@ export class AppViewController extends BaseController {
             
             try {
                 const agentStub = await getAgentStub(env, appResult.id, true, this.logger);
-                agentSummary = await agentStub.getSummary();
-
-                previewUrl = await agentStub.getPreviewUrlCache();
+                
+                if (agentStub && agentStub.getSummary && agentStub.getPreviewUrlCache) {
+                    agentSummary = await agentStub.getSummary();
+                    previewUrl = await agentStub.getPreviewUrlCache();
+                } else {
+                    this.logger.warn('Agent stub missing required methods', { agentId: appResult.id });
+                }
             } catch (agentError) {
                 // If agent doesn't exist or error occurred, fall back to database stored files
                 this.logger.warn('Could not fetch agent state, using stored files:', agentError);

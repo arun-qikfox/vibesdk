@@ -138,6 +138,14 @@ export class GitHubExporterController extends BaseController {
                             repositoryUrl: createResult.repository.html_url
                         });
 
+                        if (!agentStub || !agentStub.pushToGitHub) {
+                            this.logger.error('Agent stub missing pushToGitHub method', { agentId });
+                            return Response.redirect(
+                                `${returnUrl}?github_export=error&reason=${encodeURIComponent('agent_method_unavailable')}`,
+                                302,
+                            );
+                        }
+
                         const pushResult = await agentStub.pushToGitHub(pushRequest);
 
                         if (!pushResult?.success) {
