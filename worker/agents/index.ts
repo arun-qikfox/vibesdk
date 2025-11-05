@@ -23,10 +23,12 @@ export async function getAgentStub(env: Env, agentId: string, searchInOtherJuris
                     locationHint: 'enam',
                     jurisdiction: jurisdiction,
                 });
-                const isInitialized = await stub.isInitialized()
-                if (isInitialized) {
-                    logger.info(`Agent ${agentId} found in jurisdiction ${jurisdiction}`);
-                    return stub
+                if (stub && stub.isInitialized) {
+                    const isInitialized = await stub.isInitialized()
+                    if (isInitialized) {
+                        logger.info(`Agent ${agentId} found in jurisdiction ${jurisdiction}`);
+                        return stub
+                    }
                 }
             } catch (error) {
                 logger.info(`Agent ${agentId} not found in jurisdiction ${jurisdiction}`);
@@ -43,17 +45,27 @@ export async function getAgentStub(env: Env, agentId: string, searchInOtherJuris
 
 export async function getAgentState(env: Env, agentId: string, searchInOtherJurisdictions: boolean = false, logger: StructuredLogger) : Promise<CodeGenState> {
     const agentInstance = await getAgentStub(env, agentId, searchInOtherJurisdictions, logger);
-    return agentInstance.getFullState() as CodeGenState;
+    if (!agentInstance || !agentInstance.getFullState) {
+        throw new Error(`Agent ${agentId} not found or not initialized`);
+    }
+    return await agentInstance.getFullState() as CodeGenState;
 }
 
 export async function cloneAgent(env: Env, agentId: string, logger: StructuredLogger) : Promise<{newAgentId: string, newAgent: DurableObjectStub<SmartCodeGeneratorAgent>}> {
     const agentInstance = await getAgentStub(env, agentId, true, logger);
-    if (!agentInstance || !await agentInstance.isInitialized()) {
+    if (!agentInstance || !agentInstance.isInitialized) {
         throw new Error(`Agent ${agentId} not found`);
+    }
+    const isInitialized = await agentInstance.isInitialized();
+    if (!isInitialized) {
+        throw new Error(`Agent ${agentId} not initialized`);
     }
     const newAgentId = generateId();
 
     const newAgent = await getAgentStub(env, newAgentId, false, logger);
+    if (!newAgent || !newAgent.getFullState) {
+        throw new Error(`Failed to create new agent ${newAgentId}`);
+    }
     const originalState = await agentInstance.getFullState() as CodeGenState;
     const newState = {
         ...originalState,

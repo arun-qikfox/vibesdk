@@ -220,6 +220,26 @@ type CloudflareDeploymentErrorMessage = {
 	error: string;
 };
 
+type AppEngineDeploymentStartedMessage = {
+	type: 'app_engine_deployment_started';
+	message: string;
+	instanceId: string;
+};
+
+type AppEngineDeploymentCompletedMessage = {
+	type: 'app_engine_deployment_completed';
+	message: string;
+	instanceId: string;
+	deploymentUrl: string;
+};
+
+type AppEngineDeploymentErrorMessage = {
+	type: 'app_engine_deployment_error';
+	message: string;
+	instanceId: string;
+	error: string;
+};
+
 type ScreenshotCaptureStartedMessage = {
 	type: 'screenshot_capture_started';
 	message: string;
@@ -406,6 +426,9 @@ export type WebSocketMessage =
 	| CloudflareDeploymentStartedMessage
 	| CloudflareDeploymentCompletedMessage
 	| CloudflareDeploymentErrorMessage
+	| AppEngineDeploymentStartedMessage
+	| AppEngineDeploymentCompletedMessage
+	| AppEngineDeploymentErrorMessage
 	| ScreenshotCaptureStartedMessage
 	| ScreenshotCaptureSuccessMessage
 	| ScreenshotCaptureErrorMessage

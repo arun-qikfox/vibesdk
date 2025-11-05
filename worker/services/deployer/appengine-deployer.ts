@@ -19,11 +19,12 @@ export interface AppEngineDeployResult {
 
 export class AppEngineDeployer {
 	private readonly projectId: string;
+	// Store serviceAccountKey for potential future use (e.g., API calls)
 	private readonly serviceAccountKey: string;
 
 	constructor(projectId: string, serviceAccountKey: string) {
 		this.projectId = projectId;
-		this.serviceAccountKey = serviceAccountKey;
+		this.serviceAccountKey = serviceAccountKey; // Store for potential future use
 	}
 
 	/**

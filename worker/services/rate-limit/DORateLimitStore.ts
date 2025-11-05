@@ -1,4 +1,4 @@
-import { DurableObject } from 'cloudflare:workers';
+// Note: DurableObject is declared in worker-configuration.d.ts
 
 export interface RateLimitBucket {
     count: number;

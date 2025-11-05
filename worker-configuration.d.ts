@@ -60,6 +60,64 @@ interface RateLimit {
 	limit(options: { key: string; limit?: number; period?: number }): Promise<{ success: boolean; limit?: number; remaining?: number; reset?: number }>;
 }
 
+// Cloudflare Workers WebSocketPair type
+interface WebSocketPair {
+	0: WebSocket;
+	1: WebSocket;
+}
+
+// Cloudflare Workers DurableObject base class
+declare class DurableObject {
+	constructor(ctx: DurableObjectState, env: Env);
+	fetch(request: Request): Promise<Response>;
+}
+
+// Cloudflare Workers DurableObjectState type
+interface DurableObjectState {
+	id: DurableObjectID;
+	waitUntil(promise: Promise<any>): void;
+	storage: DurableObjectStorage;
+	getWebSockets(): WebSocket[];
+}
+
+// Cloudflare Workers DurableObjectStorage type
+interface DurableObjectStorage {
+	get<T = unknown>(key: string): Promise<T | undefined>;
+	get<T = unknown>(keys: string[]): Promise<Map<string, T>>;
+	put<T = unknown>(key: string, value: T): Promise<void>;
+	put<T = unknown>(entries: Record<string, T>): Promise<void>;
+	delete(key: string): Promise<boolean>;
+	delete(keys: string[]): Promise<number>;
+	list<T = unknown>(options?: { start?: string; end?: string; prefix?: string; reverse?: boolean; limit?: number }): Promise<Map<string, T>>;
+	transaction<T>(closure: (txn: DurableObjectTransaction) => Promise<T>): Promise<T>;
+	getAlarm(): Promise<number | null>;
+	setAlarm(scheduledTime: number | Date): Promise<void>;
+	deleteAlarm(): Promise<void>;
+	sync(): Promise<void>;
+}
+
+// Cloudflare Workers DurableObjectTransaction type
+interface DurableObjectTransaction {
+	get<T = unknown>(key: string): Promise<T | undefined>;
+	get<T = unknown>(keys: string[]): Promise<Map<string, T>>;
+	put<T = unknown>(key: string, value: T): void;
+	put<T = unknown>(entries: Record<string, T>): void;
+	delete(key: string): void;
+	delete(keys: string[]): void;
+	rollback(): void;
+}
+
+// ResponseInit with webSocket support
+interface ResponseInit {
+	status?: number;
+	statusText?: string;
+	headers?: HeadersInit;
+	webSocket?: WebSocket;
+}
+
+// AI Gateway Providers type (for Cloudflare Workers AI Gateway)
+type AIGatewayProviders = 'cloudflare' | 'openai' | 'anthropic' | 'google' | 'cohere' | 'huggingface' | 'replicate' | 'custom';
+
 declare namespace Cloudflare {
 	interface Env {
 		VibecoderStore: KVNamespace;

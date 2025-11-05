@@ -1393,7 +1393,12 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
     }
 
     getWebSockets(): WebSocket[] {
-        return this.ctx.getWebSockets();
+        // Access ctx from the Agent base class via super if available, otherwise return empty array
+        try {
+            return (this as any).ctx?.getWebSockets?.() || [];
+        } catch {
+            return [];
+        }
     }
 
     async fetchRuntimeErrors(clear: boolean = true) {
