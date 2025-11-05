@@ -1,5 +1,5 @@
 {
-	"name": "vibesdk",
+	"name": "qik-production",
 	"private": true,
 	"version": "0.0.0",
 	"type": "module",
@@ -20,6 +20,7 @@
 		"db:migrate:remote": "CI=true wrangler d1 migrations apply vibesdk-db --remote",
 		"db:studio": "drizzle-kit studio --config=drizzle.config.local.ts",
 		"db:studio:remote": "drizzle-kit studio --config=drizzle.config.remote.ts",
+		"db:setup": "bun run scripts/setup-database.ts",
 		"db:drop": "drizzle-kit drop --config=drizzle.config.local.ts",
 		"db:drop:remote": "drizzle-kit drop --config=drizzle.config.remote.ts",
 		"db:introspect": "drizzle-kit introspect --config=drizzle.config.local.ts",

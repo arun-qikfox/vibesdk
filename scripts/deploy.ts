@@ -1554,7 +1554,7 @@ class CloudflareDeploymentManager {
 	 * Deploys the project using Wrangler
 	 */
 	private async wranglerDeploy(): Promise<void> {
-		console.log('🚀 Deploying to Cloudflare Workers...');
+		console.log('🚀 Deploying to Workers...');
 
 		try {
 			execSync('wrangler deploy', {
