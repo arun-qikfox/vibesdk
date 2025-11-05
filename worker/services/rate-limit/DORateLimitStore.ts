@@ -1,4 +1,4 @@
-// Note: DurableObject is declared in worker-configuration.d.ts
+// Note: DurableObject is declared in worker-custom-types.d.ts
 
 export interface RateLimitBucket {
     count: number;
