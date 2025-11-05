@@ -53,7 +53,7 @@ interface ExecutionContext {
 	waitUntil(promise: Promise<any>): void;
 	passThroughOnException(): void;
 	// Hono requires props to be present (not optional)
-	props?: Record<string, any>;
+	props: Record<string, any>;
 }
 
 // Cloudflare Workers ExportedHandler type
@@ -89,6 +89,24 @@ interface KVNamespaceListKey<T = unknown> {
 	name: string;
 	expiration?: number;
 	metadata?: T;
+}
+
+// Cloudflare Workers KVNamespace type
+interface KVNamespace {
+	get(key: string): Promise<string | null>;
+	get(key: string, type: 'text'): Promise<string | null>;
+	get(key: string, type: 'json'): Promise<any>;
+	get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>;
+	get(key: string, type: 'stream'): Promise<ReadableStream | null>;
+	put(key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream): Promise<void>;
+	put(key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: KVNamespacePutOptions): Promise<void>;
+	delete(key: string): Promise<void>;
+	list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<KVNamespaceListResult>;
+}
+
+// Cloudflare Workers RateLimit type
+interface RateLimit {
+	limit(options: { key: string; limit?: number; period?: number }): Promise<{ success: boolean; limit?: number; remaining?: number; reset?: number }>;
 }
 
 // Cloudflare Workers WebSocketPair type
@@ -159,12 +177,14 @@ interface DurableObjectTransaction {
 }
 
 // ResponseInit with webSocket support (Cloudflare Workers extension)
-// This extends the standard ResponseInit interface
-interface ResponseInit {
-	status?: number;
-	statusText?: string;
-	headers?: HeadersInit;
-	webSocket?: WebSocket;
+// Use module augmentation to extend the global ResponseInit interface
+declare global {
+	interface ResponseInit {
+		status?: number;
+		statusText?: string;
+		headers?: HeadersInit;
+		webSocket?: WebSocket;
+	}
 }
 
 // HeadersInit type (standard Web API)

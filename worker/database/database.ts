@@ -37,7 +37,7 @@ export class DatabaseService {
     private readonly enableReplicas: boolean;
 
     constructor(env: Env) {
-        const instrumented = Sentry.instrumentD1WithSentry(env.DB) as D1Database;
+        const instrumented = Sentry.instrumentD1WithSentry(env.DB) as unknown as D1Database;
         this.d1 = instrumented;
         this.db = drizzle(instrumented, { schema });
         this.enableReplicas = env.ENABLE_READ_REPLICAS === 'true';

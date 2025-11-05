@@ -163,10 +163,10 @@ const worker = {
 			logger.info(`Handling API request for: ${url}`);
 			const app = createApp(env);
 			// Hono's ExecutionContext requires props, so we ensure it's present
-			const honoCtx: ExecutionContext = {
+			const honoCtx = {
 				...ctx,
 				props: ctx.props || {}
-			};
+			} as ExecutionContext;
 			return app.fetch(request, env, honoCtx);
 		}
 

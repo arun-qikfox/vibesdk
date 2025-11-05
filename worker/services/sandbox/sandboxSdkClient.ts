@@ -649,6 +649,16 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
 
             // Parse and detect placeholders
+            if (!wranglerFile.content) {
+                this.logger.info(`No content in wrangler.jsonc for ${instanceId}, skipping resource provisioning`);
+                return {
+                    success: true,
+                    provisioned: [],
+                    failed: [],
+                    replacements: {},
+                    wranglerUpdated: false
+                };
+            }
             const templateParser = new TemplateParser(this.logger);
             const parseResult = templateParser.parseWranglerConfig(wranglerFile.content);
 
