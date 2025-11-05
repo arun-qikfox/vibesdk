@@ -1234,7 +1234,16 @@ export class SandboxSdkClient extends BaseSandboxService {
             
             const filteredFiles = files.filter(file => !donttouchFiles.has(file.filePath));
 
-            const writePromises = filteredFiles.map(file => sandbox.writeFile(`${instanceId}/${file.filePath}`, file.fileContents));
+            // Map files to promises that track both the file path and the write result
+            const writePromises = filteredFiles.map(async (file) => {
+                const filePath = `${instanceId}/${file.filePath}`;
+                try {
+                    await sandbox.writeFile(filePath, file.fileContents);
+                    return { success: true, path: file.filePath };
+                } catch (error) {
+                    return { success: false, path: file.filePath, error: error instanceof Error ? error.message : 'Unknown error' };
+                }
+            });
             
             const writeResults = await Promise.all(writePromises);
             
@@ -1251,7 +1260,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                     results.push({
                         file: writeResult.path,
                         success: false,
-                        error: 'Unknown error'
+                        error: writeResult.error || 'Unknown error'
                     });
                 }
             }
@@ -1359,7 +1368,7 @@ export class SandboxSdkClient extends BaseSandboxService {
             for (const readResult of readResults) {
                 if (readResult.status === 'fulfilled') {
                     const { result, filePath } = readResult.value;
-                    if (result && result.success) {
+                    if (result && result.success && result.content !== undefined) {
                         files.push({
                             filePath: filePath,
                             fileContents: (applyFilter && redactedPaths.has(filePath)) ? '[REDACTED]' : result.content
@@ -1754,7 +1763,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                 // Fetch a single file from the instance
                 try {
                     const result = await this.getSandbox().readFile(`${instanceId}/${filePath}`);
-                    if (result.success) {
+                    if (result.success && result.content !== undefined) {
                         this.logger.info(`Successfully fetched file: ${filePath}`);
                         return {
                             filePath: filePath,
@@ -1762,7 +1771,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                             filePurpose: `Fetched file: ${filePath}`
                         };
                     } else {
-                        this.logger.debug(`File not found: ${filePath}`);
+                        this.logger.debug(`File not found or empty: ${filePath}`);
                     }
                 } catch (error) {
                     this.logger.debug(`Failed to fetch file ${filePath}: ${error instanceof Error ? error.message : 'Unknown error'}`);
