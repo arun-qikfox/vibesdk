@@ -1,4 +1,4 @@
-// Note: DurableObject is declared in worker-custom-types.d.ts
+import { DurableObject } from 'cloudflare:workers';
 
 export interface RateLimitBucket {
     count: number;
@@ -30,8 +30,7 @@ export interface RateLimitResult {
  * Provides distributed rate limiting using bucketed sliding window algorithm
  * similar to the KV implementation but with better scalability, consistency and cost-effectiveness
  */
-export class DORateLimitStore extends DurableObject {
-    protected ctx: DurableObjectState;
+export class DORateLimitStore extends DurableObject<Env> {
     private state: RateLimitState = {
         buckets: new Map(),
         lastCleanup: Date.now()
@@ -40,7 +39,6 @@ export class DORateLimitStore extends DurableObject {
 
     constructor(ctx: DurableObjectState, env: Env) {
         super(ctx, env);
-        this.ctx = ctx; // Store ctx for access in methods
     }
 
     async increment(key: string, config: RateLimitConfig, incrementBy: number = 1): Promise<RateLimitResult> {
