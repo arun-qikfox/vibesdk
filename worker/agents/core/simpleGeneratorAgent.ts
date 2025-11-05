@@ -99,6 +99,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         new StateManager(() => this.state, (s) => this.setState(s)),
     );
     protected codingAgent: CodingAgentInterface = new CodingAgentInterface(this);
+    protected env: Env; // Store env from constructor
 
     private previewUrlCache: string = '';
     
@@ -227,6 +228,7 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
 
     constructor(ctx: AgentContext, env: Env) {
         super(ctx, env);
+        this.env = env; // Store env for access throughout the class
         this.sql`CREATE TABLE IF NOT EXISTS full_conversations (id TEXT PRIMARY KEY, messages TEXT)`;
         this.sql`CREATE TABLE IF NOT EXISTS compact_conversations (id TEXT PRIMARY KEY, messages TEXT)`;
     }

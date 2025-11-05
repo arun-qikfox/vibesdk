@@ -8,14 +8,57 @@ declare module 'cloudflare:workers' {
 
 // Declare DurableObjectStub type for Cloudflare Workers
 // This is a stub returned by DurableObjectNamespace.get() or .id()
+// The stub can call methods on the Durable Object instance
 interface DurableObjectStub<T = any> {
 	// Durable Object stub methods
 	fetch: (request: Request) => Promise<Response>;
 	id: DurableObjectID;
 	name?: string;
+	// Methods that can be called on the stub (will be forwarded to the DO instance)
+	isInitialized?: () => Promise<boolean>;
+	getFullState?: () => Promise<any>;
+	setState?: (state: any) => Promise<void>;
+	deployToSandbox?: () => Promise<any>;
+	deployToAppEngine?: () => Promise<any>;
+	getSummary?: () => Promise<any>;
+	getPreviewUrlCache?: () => Promise<string>;
+	pushToGitHub?: (options: any) => Promise<any>;
+	// Sandbox-specific methods (when T is Sandbox)
+	exec?: (command: string, options?: any) => Promise<any>;
+	writeFile?: (path: string, content: string) => Promise<void>;
+	readFile?: (path: string) => Promise<{ success: boolean; content?: string }>;
+	// Additional methods that may be available on the stub
+	[key: string]: any;
 }
 
 type DurableObjectID = string | { id: string; name: string };
+
+// Durable Object Jurisdiction type
+type DurableObjectJurisdiction = 'eu' | 'fedramp' | undefined;
+
+// Cloudflare Workers ExecutionContext type
+interface ExecutionContext {
+	waitUntil(promise: Promise<any>): void;
+	passThroughOnException(): void;
+}
+
+// Cloudflare Workers KVNamespace type
+interface KVNamespace {
+	get(key: string): Promise<string | null>;
+	get(key: string, type: 'text'): Promise<string | null>;
+	get(key: string, type: 'json'): Promise<any>;
+	get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>;
+	get(key: string, type: 'stream'): Promise<ReadableStream | null>;
+	put(key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream): Promise<void>;
+	put(key: string, value: string | ArrayBuffer | ArrayBufferView | ReadableStream, options?: { expirationTtl?: number; expiration?: number; metadata?: any }): Promise<void>;
+	delete(key: string): Promise<void>;
+	list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{ keys: Array<{ name: string; expiration?: number; metadata?: any }>; list_complete: boolean; cursor?: string }>;
+}
+
+// Cloudflare Workers RateLimit type
+interface RateLimit {
+	limit(options: { key: string; limit?: number; period?: number }): Promise<{ success: boolean; limit?: number; remaining?: number; reset?: number }>;
+}
 
 declare namespace Cloudflare {
 	interface Env {
