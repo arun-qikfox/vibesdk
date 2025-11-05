@@ -214,6 +214,13 @@ import { FileOutputType } from 'worker/agents/schemas';
      * Returns: { success: boolean, message: string, deployedUrl?: string, deploymentId?: string, error?: string }
      */
     abstract deployToCloudflareWorkers(instanceId: string): Promise<DeploymentResult>;
+
+    /**
+     * Deploy static frontend instance to Google App Engine
+     * Phase 1: Frontend-only deployment
+     * Returns: { success: boolean, message: string, deployedUrl?: string, deploymentId?: string, error?: string }
+     */
+    abstract deployToAppEngine(instanceId: string): Promise<DeploymentResult>;
   
     // ==========================================
     // GITHUB INTEGRATION (Required)

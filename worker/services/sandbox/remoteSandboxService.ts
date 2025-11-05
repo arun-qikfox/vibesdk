@@ -206,6 +206,14 @@ export class RemoteSandboxServiceClient extends BaseSandboxService{
     }
 
     /**
+     * Deploy a runner instance to Google App Engine.
+     * @param instanceId The ID of the runner instance to deploy
+     */
+    async deployToAppEngine(instanceId: string): Promise<DeploymentResult> {
+        return this.makeRequest(`/instances/${instanceId}/deploy/appengine`, 'POST', DeploymentResultSchema);
+    }
+
+    /**
      * Shutdown a runner instance.
      */
     async shutdownInstance(instanceId: string): Promise<ShutdownResponse> {

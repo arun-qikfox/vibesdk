@@ -335,4 +335,37 @@ export class CodingAgentController extends BaseController {
             return appError;
         }
     }
+
+    static async deployToAppEngine(
+        _request: Request,
+        env: Env,
+        _: ExecutionContext,
+        context: RouteContext
+    ): Promise<ControllerResponse<ApiResponse<{ deploymentUrl: string }>>> {
+        try {
+            const agentId = context.pathParams.agentId;
+            if (!agentId) {
+                return CodingAgentController.createErrorResponse('Agent ID required', 400);
+            }
+
+            this.logger.info(`Deploying to App Engine for agent: ${agentId}`);
+
+            try {
+                const agentInstance = await getAgentStub(env, agentId, true, this.logger);
+                const result = await agentInstance.deployToAppEngine();
+
+                if (result?.deploymentUrl) {
+                    return CodingAgentController.createSuccessResponse({ deploymentUrl: result.deploymentUrl });
+                } else {
+                    return CodingAgentController.createErrorResponse('Deployment failed', 500);
+                }
+            } catch (error) {
+                this.logger.error('Failed to deploy to App Engine', { agentId, error });
+                return CodingAgentController.createErrorResponse('Deployment failed', 500);
+            }
+        } catch (error) {
+            this.logger.error('Error deploying to App Engine', error);
+            return CodingAgentController.handleError(error, 'deploy to App Engine') as ControllerResponse<ApiResponse<{ deploymentUrl: string }>>;
+        }
+    }
 }

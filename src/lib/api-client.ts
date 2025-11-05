@@ -958,6 +958,18 @@ class ApiClient {
 		);
 	}
 
+	/**
+	 * Deploy to Google App Engine
+	 */
+	async deployToAppEngine(
+		agentId: string,
+	): Promise<ApiResponse<{ deploymentUrl: string }>> {
+		return this.request<{ deploymentUrl: string }>(
+			`/api/agent/${agentId}/deploy/appengine`,
+			{ method: 'POST' }
+		);
+	}
+
 	// ===============================
 	// Session Management API Methods
 	// ===============================

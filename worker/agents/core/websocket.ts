@@ -85,12 +85,12 @@ export function handleWebSocketMessage(agent: SimpleCodeGeneratorAgent, connecti
                 });
                 break;
             case WebSocketMessageRequests.DEPLOY:
-                agent.deployToCloudflare().then((deploymentResult) => {
+                agent.deployToAppEngine().then((deploymentResult) => {
                     if (!deploymentResult) {
-                        logger.error('Failed to deploy to Cloudflare Workers');
+                        logger.error('Failed to deploy to App Engine');
                         return;
                     }
-                    logger.info('Successfully deployed to Cloudflare Workers!', deploymentResult);
+                    logger.info('Successfully deployed to App Engine!', deploymentResult);
                 }).catch((error: unknown) => {
                     logger.error('Error during deployment:', error);
                 });

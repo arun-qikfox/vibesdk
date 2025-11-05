@@ -30,6 +30,11 @@ export const WebSocketMessageResponses: Record<string, WebSocketMessageType> = {
     CLOUDFLARE_DEPLOYMENT_COMPLETED: 'cloudflare_deployment_completed', 
     CLOUDFLARE_DEPLOYMENT_ERROR: 'cloudflare_deployment_error',
     
+    // App Engine deployment messages
+    APP_ENGINE_DEPLOYMENT_STARTED: 'app_engine_deployment_started',
+    APP_ENGINE_DEPLOYMENT_COMPLETED: 'app_engine_deployment_completed',
+    APP_ENGINE_DEPLOYMENT_ERROR: 'app_engine_deployment_error',
+    
     // Screenshot messages
     SCREENSHOT_CAPTURE_STARTED: 'screenshot_capture_started',
     SCREENSHOT_CAPTURE_SUCCESS: 'screenshot_capture_success',

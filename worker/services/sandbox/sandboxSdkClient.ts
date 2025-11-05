@@ -1987,6 +1987,154 @@ export class SandboxSdkClient extends BaseSandboxService {
             };
         }
     }
+
+    /**
+     * Deploy static frontend to Google App Engine
+     * Phase 1: Frontend-only deployment with no backend dependencies
+     */
+    async deployToAppEngine(instanceId: string): Promise<DeploymentResult> {
+        try {
+            this.logger.info('Starting App Engine static frontend deployment', { instanceId });
+
+            // Get project metadata
+            const metadata = await this.getInstanceMetadata(instanceId);
+            const projectName = metadata?.projectName || instanceId;
+
+            // Get GCP credentials from environment
+            const projectId = env.GOOGLE_CLOUD_PROJECT_ID;
+            const serviceAccountKey = env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
+            if (!projectId || !serviceAccountKey) {
+                throw new Error('GOOGLE_CLOUD_PROJECT_ID and GOOGLE_SERVICE_ACCOUNT_KEY must be set');
+            }
+
+            const sandbox = this.getSandbox();
+            this.logger.info('Processing static frontend deployment', { instanceId });
+
+            // Step 1: Build frontend only (no backend build)
+            this.logger.info('Building frontend');
+            const buildResult = await this.executeCommand(instanceId, 'npm run build');
+            if (buildResult.exitCode !== 0) {
+                throw new Error(`Frontend build failed: ${buildResult.stderr}`);
+            }
+
+            // Step 2: Read static files from dist directory
+            this.logger.info('Reading static files');
+            const distPath = `${instanceId}/dist`;
+            const staticFiles = await this.readStaticFilesFromSandbox(distPath);
+
+            // Step 3: Generate app.yaml for static site
+            const appYaml = this.generateStaticAppYaml(projectName);
+
+            // Step 4: Write app.yaml to sandbox root
+            await sandbox.writeFile(`${instanceId}/app.yaml`, appYaml);
+
+            // Step 5: Authenticate gcloud with service account key
+            // Write service account key to a temporary file
+            const keyPath = `.gcloud-key.json`;
+            const serviceAccountJson = Buffer.from(serviceAccountKey, 'base64').toString('utf8');
+            await sandbox.writeFile(`${instanceId}/${keyPath}`, serviceAccountJson);
+
+            // Authenticate gcloud
+            this.logger.info('Authenticating gcloud with service account');
+            const authResult = await this.executeCommand(
+                instanceId,
+                `gcloud auth activate-service-account --key-file=${keyPath} --project=${projectId}`
+            );
+            if (authResult.exitCode !== 0) {
+                throw new Error(`Failed to authenticate gcloud: ${authResult.stderr}`);
+            }
+
+            // Step 6: Deploy to App Engine using gcloud CLI
+            this.logger.info('Deploying to App Engine via gcloud');
+            const deployResult = await this.executeCommand(
+                instanceId,
+                `gcloud app deploy app.yaml --quiet --project=${projectId}`
+            );
+            if (deployResult.exitCode !== 0) {
+                throw new Error(`App Engine deployment failed: ${deployResult.stderr}`);
+            }
+
+            // Step 7: Get deployment URL
+            const deployedUrl = `https://${projectName}.${projectId}.appspot.com`;
+            const versionId = `v${Date.now()}`;
+
+            // Clean up service account key file
+            await this.executeCommand(instanceId, `rm -f ${keyPath}`);
+
+            this.logger.info('App Engine deployment successful', {
+                instanceId,
+                deployedUrl,
+                versionId,
+            });
+
+            return {
+                success: true,
+                message: `Successfully deployed static frontend to App Engine`,
+                deployedUrl,
+                deploymentId: versionId,
+                output: `Deployed to ${deployedUrl}`,
+            };
+        } catch (error) {
+            this.logger.error('deployToAppEngine failed', error, { instanceId });
+            return {
+                success: false,
+                message: `Deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Read static files from sandbox dist directory
+     */
+    private async readStaticFilesFromSandbox(distPath: string): Promise<Map<string, Buffer>> {
+        const files = new Map<string, Buffer>();
+        const sandbox = this.getSandbox();
+
+        // List all files in dist directory
+        const listResult = await sandbox.exec(`find ${distPath} -type f`);
+        if (listResult.exitCode !== 0) {
+            throw new Error(`Failed to list dist files: ${listResult.stderr}`);
+        }
+
+        const filePaths = listResult.stdout.trim().split('\n').filter(path => path);
+
+        for (const fullPath of filePaths) {
+            const relativePath = fullPath.replace(`${distPath}/`, '');
+            try {
+                const buffer = await this.readFileAsBase64Buffer(fullPath);
+                files.set(relativePath, buffer);
+                this.logger.info('Static file loaded', { path: relativePath, sizeKB: (buffer.length / 1024).toFixed(2) });
+            } catch (error) {
+                this.logger.warn(`Failed to read static file ${fullPath}:`, error);
+            }
+        }
+
+        return files;
+    }
+
+    /**
+     * Generate app.yaml for static frontend deployment
+     */
+    private generateStaticAppYaml(appName: string): string {
+        return `runtime: nodejs20
+service: ${appName}
+instance_class: F1
+automatic_scaling:
+  min_instances: 0
+  max_instances: 2
+handlers:
+  - url: /.*
+    static_files: dist/index.html
+    upload: dist/index.html
+  - url: /(.*)
+    static_files: dist/\\1
+    upload: dist/.*
+env_variables:
+  NODE_ENV: production
+`;
+    }
     
     /**
      * Process static assets in sandbox and create manifest for deployment

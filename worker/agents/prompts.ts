@@ -1168,6 +1168,21 @@ export const STRATEGIES_UTILS = {
     **Make sure the primary (home) page is rendered correctly and as expected after each phase**
     **Make sure to overwrite the home page file**`,
     CONSTRAINTS: `<PHASE GENERATION CONSTRAINTS>
+        **STATIC FRONTEND DEPLOYMENT (Phase 1):**
+        - Generate ONLY frontend code (React components, UI)
+        - NO backend API routes or server code
+        - NO database access or SQL queries
+        - NO Cloudflare Workers API usage
+        - Use mock data or static JSON for data
+        - All API calls should be mocked or commented out
+        - Focus on UI/UX implementation only
+        
+        **DEPLOYMENT CONFIGURATION:**
+        - Frontend will be deployed as static site
+        - No runtime dependencies beyond frontend framework
+        - Build output goes to dist/ directory
+        - Static files served from dist/ or public/
+        
         **Focus on building the frontend and all the views/pages in the initial 1-2 phases with core functionality and mostly mock data, then fleshing out the application**    
         **Before writing any components of your own, make sure to check the existing components and files in the template, try to use them if possible (for example preinstalled shadcn components)**
         **If auth functionality is required, provide mock auth functionality primarily. Provide real auth functionality ONLY IF template has persistence layer. Remember to seed the persistence layer with mock data AND Always PREFILL the UI with mock credentials. No oauth needed**

@@ -517,19 +517,21 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 break;
             }
 
-            case 'cloudflare_deployment_started': {
+            case 'cloudflare_deployment_started':
+            case 'app_engine_deployment_started': {
                 setIsDeploying(true);
-                sendMessage(createAIMessage('cloudflare_deployment_started', message.message));
+                sendMessage(createAIMessage('app_engine_deployment_started', message.message));
                 break;
             }
 
-            case 'cloudflare_deployment_completed': {
+            case 'cloudflare_deployment_completed':
+            case 'app_engine_deployment_completed': {
                 setIsDeploying(false);
                 setCloudflareDeploymentUrl(message.deploymentUrl);
                 setDeploymentError('');
                 setIsRedeployReady(false);
                 
-                sendMessage(createAIMessage('cloudflare_deployment_completed', `Your project has been permanently deployed to Cloudflare Workers: ${message.deploymentUrl}`));
+                sendMessage(createAIMessage('app_engine_deployment_completed', `Your project has been permanently deployed to Google App Engine: ${message.deploymentUrl}`));
                 
                 onDebugMessage?.('info', 
                     'Deployment Completed - Redeploy Reset',
@@ -539,13 +541,14 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 break;
             }
 
-            case 'cloudflare_deployment_error': {
+            case 'cloudflare_deployment_error':
+            case 'app_engine_deployment_error': {
                 setIsDeploying(false);
                 setDeploymentError(message.error || 'Unknown deployment error');
                 setCloudflareDeploymentUrl('');
                 setIsRedeployReady(true);
                 
-                sendMessage(createAIMessage('cloudflare_deployment_error', `❌ Deployment failed: ${message.error}\n\n🔄 You can try deploying again.`));
+                sendMessage(createAIMessage('app_engine_deployment_error', `❌ Deployment failed: ${message.error}\n\n🔄 You can try deploying again.`));
 
                 toast.error(`Error: ${message.error}`);
                 

@@ -153,7 +153,7 @@ export function DeploymentControls({
 					icon: null,
 					titleColor: "text-text-tertiary dark:text-text-tertiary",
 					subtitleColor: "text-text-tertiary/80 dark:text-text-tertiary/70",
-					title: "Deploy to Cloudflare",
+					title: "Deploy to App Engine",
 					subtitle: "Deploy will be enabled after Phase 1 is implemented",
 					buttonDisabled: true,
 					buttonVariant: "secondary" as const,
@@ -168,7 +168,7 @@ export function DeploymentControls({
 					titleColor: "text-text-primary dark:text-text-primary",
 					subtitleColor: "text-text-tertiary dark:text-text-tertiary",
 					title: "Ready to Deploy",
-					subtitle: "It's Free! Deploys to Cloudflare Workers for Platform",
+					subtitle: "Deploy to Google App Engine (Static Frontend)",
 					buttonDisabled: false,
 					buttonVariant: "primary" as const,
 					buttonClass: "bg-accent text-white border-orange-500 dark:border-orange-600 hover:scale-105"
@@ -181,7 +181,7 @@ export function DeploymentControls({
 					icon: <Loader className="w-2.5 h-2.5 text-white animate-spin" />,
 					titleColor: "text-blue-900 dark:text-blue-100",
 					subtitleColor: "text-blue-600 dark:text-blue-300",
-					title: "Deploying to Cloudflare",
+					title: "Deploying to App Engine",
 					subtitle: "Please wait while your application is being deployed...",
 					buttonDisabled: true,
 					buttonVariant: "primary" as const,
@@ -195,7 +195,7 @@ export function DeploymentControls({
 					icon: <Loader className="w-2.5 h-2.5 text-white animate-spin" />,
 					titleColor: "text-blue-900 dark:text-blue-100",
 					subtitleColor: "text-blue-600 dark:text-blue-300",
-					title: "Redeploying to Cloudflare",
+					title: "Redeploying to App Engine",
 					subtitle: "Please wait while your application is being redeployed...",
 					buttonDisabled: true,
 					buttonVariant: "primary" as const,
@@ -279,7 +279,7 @@ export function DeploymentControls({
 							) : (
 								<>
 									<Zap className="w-4 h-4 mr-2" />
-									Deploy to Cloudflare
+									Deploy to App Engine
 								</>
 							)}
 						</Button>

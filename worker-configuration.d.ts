@@ -42,6 +42,9 @@ declare namespace Cloudflare {
 		CF_ACCESS_ID: string;
 		CF_ACCESS_SECRET: string;
 		SENTRY_DSN: string;
+		DEFAULT_DEPLOYMENT_TARGET?: 'cloudflare' | 'app_engine';
+		GOOGLE_CLOUD_PROJECT_ID?: string;
+		GOOGLE_SERVICE_ACCOUNT_KEY?: string;
 		CodeGenObject: DurableObjectNamespace<import("./worker/index").CodeGeneratorAgent>;
 		Sandbox: DurableObjectNamespace<import("./worker/index").UserAppSandboxService>;
 		DORateLimitStore: DurableObjectNamespace<import("./worker/index").DORateLimitStore>;

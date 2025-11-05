@@ -2005,6 +2005,85 @@ export class SimpleCodeGeneratorAgent extends Agent<Env, CodeGenState> {
         }
     }
 
+    /**
+     * Deploy the generated static frontend to Google App Engine
+     * Phase 1: Frontend-only deployment (no backend)
+     */
+    async deployToAppEngine(): Promise<{ deploymentUrl?: string } | null> {
+        try {
+            this.logger().info('Starting App Engine deployment');
+            
+            await this.waitForPreview();
+            this.broadcast(WebSocketMessageResponses.APP_ENGINE_DEPLOYMENT_STARTED, {
+                message: 'Starting deployment to Google App Engine...',
+                instanceId: this.state.sandboxInstanceId,
+            });
+
+            // Check if we have generated files
+            if (!this.state.generatedFilesMap || Object.keys(this.state.generatedFilesMap).length === 0) {
+                this.logger().error('No generated files available for deployment');
+                this.broadcast(WebSocketMessageResponses.APP_ENGINE_DEPLOYMENT_ERROR, {
+                    message: 'Deployment failed: No generated code available',
+                    error: 'No files have been generated yet'
+                });
+                return null;
+            }
+
+            // Check if we have a sandbox instance ID
+            if (!this.state.sandboxInstanceId) {
+                this.logger().info('[DeployToAppEngine] No sandbox instance ID available, will initiate deployment');
+                await this.deployToSandbox([], false);
+
+                if (!this.state.sandboxInstanceId) {
+                    this.logger().error('[DeployToAppEngine] Failed to deploy to sandbox service');
+                    this.broadcast(WebSocketMessageResponses.APP_ENGINE_DEPLOYMENT_ERROR, {
+                        message: 'Deployment failed: Failed to deploy to sandbox service',
+                        error: 'Sandbox service unavailable'
+                    });
+                    return null;
+                }
+            }
+
+            this.logger().info('[DeployToAppEngine] Prerequisites met, initiating deployment', {
+                sandboxInstanceId: this.state.sandboxInstanceId,
+                fileCount: Object.keys(this.state.generatedFilesMap).length
+            });
+
+            const deploymentResult = await this.getSandboxServiceClient()
+                .deployToAppEngine(this.state.sandboxInstanceId);
+
+            this.logger().info('[DeployToAppEngine] Deployment result:', deploymentResult);
+
+            if (deploymentResult.success && deploymentResult.deployedUrl) {
+                const appService = new AppService(this.env);
+                // Update deployment URL in database
+                await appService.updateDeploymentId(
+                    this.getAgentId(),
+                    deploymentResult.deploymentId || ''
+                );
+
+                this.broadcast(WebSocketMessageResponses.APP_ENGINE_DEPLOYMENT_COMPLETED, {
+                    message: 'Successfully deployed to App Engine!',
+                    deploymentUrl: deploymentResult.deployedUrl,
+                    instanceId: this.state.sandboxInstanceId,
+                });
+
+                return {
+                    deploymentUrl: deploymentResult.deployedUrl,
+                };
+            } else {
+                throw new Error(deploymentResult.error || 'Deployment failed');
+            }
+        } catch (error) {
+            this.logger().error('App Engine deployment failed', error);
+            this.broadcast(WebSocketMessageResponses.APP_ENGINE_DEPLOYMENT_ERROR, {
+                message: `Deployment failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+            return null;
+        }
+    }
+
     async waitForGeneration(): Promise<void> {
         if (this.state.generationPromise) {
             try {
