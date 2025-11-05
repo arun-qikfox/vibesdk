@@ -109,6 +109,7 @@ export class AppEngineDeployer {
 
 	/**
 	 * Generate app.yaml for static frontend deployment
+	 * Configured to serve React SPA correctly with client-side routing support
 	 * @param shortServiceName - Shortened service name (use generateShortServiceName to generate)
 	 */
 	generateStaticAppYaml(shortServiceName: string): string {
@@ -119,12 +120,20 @@ automatic_scaling:
   min_instances: 0
   max_instances: 2
 handlers:
+  # Serve static assets (JS, CSS, images, etc.) with proper cache headers
+  - url: /(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json|webp|map))$
+    static_files: dist/\\1
+    upload: dist/.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json|webp|map)$
+    expiration: 1y
+    http_headers:
+      Cache-Control: "public, max-age=31536000, immutable"
+  # Serve all other routes with index.html for React Router/client-side routing
   - url: /.*
     static_files: dist/index.html
     upload: dist/index.html
-  - url: /(.*)
-    static_files: dist/\\1
-    upload: dist/.*
+    expiration: 0s
+    http_headers:
+      Cache-Control: "no-cache, no-store, must-revalidate"
 env_variables:
   NODE_ENV: production
 `;
