@@ -190,46 +190,8 @@ declare global {
 // HeadersInit type (standard Web API)
 type HeadersInit = Headers | string[][] | Record<string, string>;
 
-// D1Database type (Cloudflare D1 Database)
-// Note: This extends @cloudflare/workers-types D1Database to add missing methods
-interface D1Database {
-	prepare(query: string): D1PreparedStatement;
-	exec(query: string): Promise<D1ExecResult>;
-	batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
-	withSession(sessionType: 'first-primary' | 'first-unconstrained'): D1Database;
-	dump(): Promise<ArrayBuffer>;
-}
-
-// D1PreparedStatement type
-interface D1PreparedStatement {
-	bind(...values: unknown[]): D1PreparedStatement;
-	first<T = unknown>(colName?: string): Promise<T | null>;
-	first<T = unknown>(): Promise<T | null>;
-	run<T = unknown>(): Promise<D1Result<T>>;
-	all<T = unknown>(): Promise<D1Result<T>>;
-	raw<T = unknown>(): Promise<T[]>;
-}
-
-// D1Result type
-interface D1Result<T = unknown> {
-	success: boolean;
-	meta: {
-		changed_db: boolean;
-		changes: number;
-		duration: number;
-		last_row_id: number;
-		rows_read: number;
-		rows_written: number;
-		size_after: number;
-	};
-	results?: T[];
-}
-
-// D1ExecResult type
-interface D1ExecResult {
-	count: number;
-	duration: number;
-}
+// Note: D1Database types are provided by @cloudflare/workers-types
+// Do not redefine them here to avoid conflicts with drizzle-orm
 
 // AI Gateway Providers type (for Cloudflare Workers AI Gateway)
 type AIGatewayProviders = 'cloudflare' | 'openai' | 'anthropic' | 'google' | 'cohere' | 'huggingface' | 'replicate' | 'custom';

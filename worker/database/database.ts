@@ -39,10 +39,7 @@ export class DatabaseService {
     constructor(env: Env) {
         const instrumented = Sentry.instrumentD1WithSentry(env.DB);
         this.d1 = instrumented;
-        // Cast to any to avoid type conflict between custom D1Database and @cloudflare/workers-types D1Database
-        // drizzle expects @cloudflare/workers-types D1Database, but env.DB is typed as our custom D1Database
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.db = drizzle(instrumented as any, { schema });
+        this.db = drizzle(instrumented, { schema });
         this.enableReplicas = env.ENABLE_READ_REPLICAS === 'true';
     }
 
@@ -64,9 +61,7 @@ export class DatabaseService {
         const sessionType = strategy === 'fresh' ? 'first-primary' : 'first-unconstrained';
         const session = this.d1.withSession(sessionType);
         // D1DatabaseSession is compatible with D1Database for Drizzle operations
-        // Cast to any to avoid type conflict - drizzle accepts the session type from @cloudflare/workers-types
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return drizzle(session as any, { schema });
+        return drizzle(session as unknown as D1Database, { schema });
     }
 
     // ========================================
