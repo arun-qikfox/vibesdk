@@ -33,16 +33,17 @@ export type {
  */
 export class DatabaseService {
     public readonly db: DrizzleD1Database<typeof schema>;
-    private readonly d1: D1Database;
+    // Use the official D1Database type from @cloudflare/workers-types (via env.DB)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private readonly d1: any; // Store as any to avoid type conflicts between custom and official types
     private readonly enableReplicas: boolean;
 
     constructor(env: Env) {
-        // Cast to unknown first, then to our custom D1Database type for internal use
-        const instrumented = Sentry.instrumentD1WithSentry(env.DB) as unknown as D1Database;
+        // Use Sentry's instrumented D1Database directly (returns official @cloudflare/workers-types D1Database)
+        const instrumented = Sentry.instrumentD1WithSentry(env.DB);
         this.d1 = instrumented;
-        // Cast back to official D1Database type for drizzle (which expects @cloudflare/workers-types D1Database)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.db = drizzle(instrumented as any, { schema });
+        // Pass directly to drizzle which expects the official @cloudflare/workers-types D1Database type
+        this.db = drizzle(instrumented, { schema });
         this.enableReplicas = env.ENABLE_READ_REPLICAS === 'true';
     }
 
@@ -63,9 +64,8 @@ export class DatabaseService {
 
         const sessionType = strategy === 'fresh' ? 'first-primary' : 'first-unconstrained';
         const session = this.d1.withSession(sessionType);
-        // D1DatabaseSession is compatible with D1Database for Drizzle operations
-        // Cast to D1Database to satisfy Drizzle's type requirements
-        return drizzle(session as unknown as D1Database, { schema });
+        // Pass session directly to drizzle (it expects the official @cloudflare/workers-types D1DatabaseSession type)
+        return drizzle(session, { schema });
     }
 
     // ========================================
