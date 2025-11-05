@@ -2067,6 +2067,33 @@ export class SandboxSdkClient extends BaseSandboxService {
             // Step 5: Write app.yaml to sandbox root
             await sandbox.writeFile(`${instanceId}/app.yaml`, appYaml);
 
+            // Step 5.5: Create .gcloudignore to deploy only dist folder and app.yaml
+            // This ensures only production build files are uploaded, not source code
+            const gcloudignore = `# Exclude everything
+*
+
+# Include only the dist directory and app.yaml
+!/dist/
+!/app.yaml
+
+# Explicitly exclude sensitive files
+.gcloud-key.json
+.env
+.env.local
+node_modules/
+src/
+.git/
+*.ts
+*.tsx
+*.jsx
+package.json
+package-lock.json
+tsconfig.json
+vite.config.ts
+`;
+            await sandbox.writeFile(`${instanceId}/.gcloudignore`, gcloudignore);
+            this.logger.info('Created .gcloudignore to deploy only dist folder');
+
             // Step 6: Authenticate gcloud with service account key
             // Write service account key to a temporary file
             const keyPath = `.gcloud-key.json`;
@@ -2190,6 +2217,7 @@ export class SandboxSdkClient extends BaseSandboxService {
 
     /**
      * Generate app.yaml for static frontend deployment
+     * Configured to serve React SPA correctly with client-side routing support
      */
     private async generateStaticAppYaml(shortServiceName: string): Promise<string> {
         return `runtime: nodejs20
@@ -2199,12 +2227,20 @@ automatic_scaling:
   min_instances: 0
   max_instances: 2
 handlers:
+  # Serve static assets (JS, CSS, images, etc.) with proper cache headers
+  - url: /(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json|webp|map))$
+    static_files: dist/\\1
+    upload: dist/.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json|webp|map)$
+    expiration: 1y
+    http_headers:
+      Cache-Control: "public, max-age=31536000, immutable"
+  # Serve all other routes with index.html for React Router/client-side routing
   - url: /.*
     static_files: dist/index.html
     upload: dist/index.html
-  - url: /(.*)
-    static_files: dist/\\1
-    upload: dist/.*
+    expiration: 0s
+    http_headers:
+      Cache-Control: "no-cache, no-store, must-revalidate"
 env_variables:
   NODE_ENV: production
 `;
