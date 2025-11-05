@@ -10,13 +10,29 @@ This document tracks the current status of **Strategy B: Pure Hono + PostgreSQL 
 - ✅ Maintain WebSocket real-time communication
 - ✅ Preserve agent intelligence and template system
 
-**Current Status:** 100% Complete (16/16 major components implemented)
+**Current Status:** In progress — Durable Object storage parity and sandbox orchestration still outstanding.
 
 ---
 
 ## 🚨 CRITICAL ISSUES (Blocking Production)
 
-### 1. **ESM Import Error - 'cloudflare:' Protocol**
+### 1. **Durable Object persistence gap (cf_agents_*)**
+**Status:** ⚠️ **PARTIAL - STORAGE PERSISTED, ALARMS OUTSTANDING**
+**Location:** `backend/gcp-agent-manager.js`
+**Problem:** Firestore now hydrates/persists `cf_agents_*`, queue, KV, and MCP rows; alarms still rely on in-process timers (missing Cloud Tasks/Scheduler integration), so scheduled callbacks are not durable.
+
+**Required Fix:**
+- Replace alarm stubs with Cloud Tasks / Cloud Scheduler so timers survive process restarts and scale-out.
+- Document/operator setup: Service account or ADC credentials must be provided (`GOOGLE_APPLICATION_CREDENTIALS`, `gcloud auth application-default login`, or long-lived `GCP_ACCESS_TOKEN`).
+- Verify multi-instance behaviour (ensure Firestore writes converge, de-duplicate queue processing).
+
+**Impact:** Agent state now survives restarts; scheduled tasks still volatile, so subsequent phases depending on alarms remain unreliable.
+
+**Recent change:** Added ADC fallback using `google-auth-library` so local/dev shells with `gcloud` configured no longer need manual `GCP_ACCESS_TOKEN`.
+
+---
+
+### 2. **ESM Import Error - 'cloudflare:' Protocol**
 **Status:** ✅ **RESOLVED - IMPLEMENTED**
 **Location:** `backend/gcp-agent-manager.js` and stub files
 **Solution:** Created Node.js compatible stub files and updated imports
@@ -43,7 +59,7 @@ websocketModulePromise = import('../worker/agents/core/websocket.js');
 - ESM loader can resolve all imports
 - GCP agent manager can load without 'cloudflare:' protocol errors
 
-### 2. **Gemini AI Template Selection**
+### 3. **Gemini AI Template Selection**
 **Status:** ✅ **RESOLVED - FULL GEMINI AI INTEGRATION WITH GLOBAL FETCH FIX**
 **Location:** `backend/template-selector.gcp.js` and `backend/gemini-ai-service.js`
 **Solution:** Fixed Node.js fetch compatibility issue and implemented primary Gemini AI with keyword fallback
@@ -101,7 +117,7 @@ Reasoning: Fallback selection (Selected based on keyword analysis)
 - **Production ready:** Handles all failure modes gracefully
 - **Performance:** Fast AI responses with intelligent fallbacks
 
-### 3. **GCS Template Structure Incomplete**
+### 4. **GCS Template Structure Incomplete**
 **Status:** ❌ **CRITICAL - EXTERNAL DEPENDENCY**
 **Location:** `GCS://vibesdk-templates/definitions/{template-name}/`
 **Error:** `Template c-code-react-runner did not include application files, falling back to generated template`

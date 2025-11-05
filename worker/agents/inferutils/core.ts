@@ -23,6 +23,7 @@ import { SecurityError, RateLimitExceededError } from 'shared/types/errors';
 import { executeToolWithDefinition } from '../tools/customTools';
 import { RateLimitType } from 'worker/services/rate-limit/config';
 import { MAX_LLM_MESSAGES, MAX_TOOL_CALLING_DEPTH } from '../constants';
+import { getRuntimeProvider } from 'shared/platform/runtimeProvider';
 
 function optimizeInputs(messages: Message[]): Message[] {
     return messages.map((message) => ({
@@ -187,6 +188,8 @@ function optimizeTextContent(content: string): string {
 }
 
 export async function buildGatewayUrl(env: Env, providerOverride?: AIGatewayProviders): Promise<string> {
+    const runtimeProvider = getRuntimeProvider(env);
+
     // If CLOUDFLARE_AI_GATEWAY_URL is set and is a valid URL, use it directly
     if (env.CLOUDFLARE_AI_GATEWAY_URL && 
         env.CLOUDFLARE_AI_GATEWAY_URL !== 'none' && 
@@ -194,11 +197,29 @@ export async function buildGatewayUrl(env: Env, providerOverride?: AIGatewayProv
         
         try {
             const url = new URL(env.CLOUDFLARE_AI_GATEWAY_URL);
-            // Validate it's actually an HTTP/HTTPS URL
             if (url.protocol === 'http:' || url.protocol === 'https:') {
-                // Add 'providerOverride' as a segment to the URL
-                const cleanPathname = url.pathname.replace(/\/$/, ''); // Remove trailing slash
-                url.pathname = providerOverride ? `${cleanPathname}/${providerOverride}` : `${cleanPathname}/compat`;
+                const cleanPathname = url.pathname.replace(/\/+$/, '');
+                const isCloudflareGateway = /\.gateway\.ai\.cloudflare\.com$/i.test(url.hostname);
+
+                if (!isCloudflareGateway) {
+                    if (cleanPathname.includes('{provider}')) {
+                        const replacement = providerOverride ?? 'compat';
+                        url.pathname = cleanPathname.replace('{provider}', replacement);
+                    } else if (cleanPathname.length === 0) {
+                        url.pathname = '/';
+                    } else {
+                        url.pathname = cleanPathname;
+                    }
+
+                    if (!url.pathname.endsWith('/')) {
+                        url.pathname += '/';
+                    }
+                    return url.toString();
+                }
+
+                // Cloudflare AI Gateway: append compatibility segment
+                const pathBase = cleanPathname.length === 0 ? '' : cleanPathname;
+                url.pathname = providerOverride ? `${pathBase}/${providerOverride}` : `${pathBase}/compat`;
                 return url.toString();
             }
         } catch (error) {
@@ -208,6 +229,12 @@ export async function buildGatewayUrl(env: Env, providerOverride?: AIGatewayProv
     }
     
     // Build the url via bindings
+    if (!env.AI || typeof env.AI.gateway !== 'function') {
+        throw new Error(
+            `AI gateway binding is not available for runtime provider "${runtimeProvider}". ` +
+            'Provide CLOUDFLARE_AI_GATEWAY_URL or configure env.AI.gateway before invoking model operations.',
+        );
+    }
     const gateway = env.AI.gateway(env.CLOUDFLARE_AI_GATEWAY);
     const baseUrl = providerOverride ? await gateway.getUrl(providerOverride) : `${await gateway.getUrl()}compat`;
     return baseUrl;

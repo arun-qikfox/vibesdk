@@ -280,13 +280,17 @@ class GCPCodingAgentController extends BaseController {
                     try {
                         await writer.write('terminate');
                     } catch (terminateError) {
-                        logger.error(`Failed to enqueue terminate sentinel for ${agentId}`, terminateError);
+                        if (!(terminateError && terminateError.code === 'ERR_INVALID_STATE')) {
+                            logger.error(`Failed to enqueue terminate sentinel for ${agentId}`, terminateError);
+                        }
                     }
                     try {
                         await writer.close();
                         logger.info(`Agent ${agentId} initialization stream closed successfully`);
                     } catch (closeError) {
-                        logger.error(`Failed to close initialization stream for ${agentId}`, closeError);
+                        if (!(closeError && closeError.code === 'ERR_INVALID_STATE')) {
+                            logger.error(`Failed to close initialization stream for ${agentId}`, closeError);
+                        }
                     }
                 }
             })().catch((unhandledError) => {

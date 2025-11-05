@@ -21,12 +21,13 @@ export class FileManager implements IFileManager {
 
     getGeneratedFile(path: string): FileOutputType | null {
         const state = this.stateManager.getState();
-        return state.generatedFilesMap[path] || null;
+        const filesMap = state.generatedFilesMap || {};
+        return filesMap[path] || null;
     }
 
     getAllFiles(): FileOutputType[] {
         const state = this.stateManager.getState();
-        return FileProcessing.getAllFiles(state.templateDetails, state.generatedFilesMap);
+        return FileProcessing.getAllFiles(state.templateDetails, state.generatedFilesMap || {});
     }
 
     saveGeneratedFile(file: FileOutputType): void {
@@ -35,7 +36,7 @@ export class FileManager implements IFileManager {
 
     saveGeneratedFiles(files: FileOutputType[]): void {
         const state = this.stateManager.getState();
-        const filesMap = { ...state.generatedFilesMap };
+        const filesMap = { ...(state.generatedFilesMap || {}) };
         
         for (const file of files) {
             let lastDiff = '';
@@ -68,7 +69,7 @@ export class FileManager implements IFileManager {
 
     deleteFiles(filePaths: string[]): void {
         const state = this.stateManager.getState();
-        const newFilesMap = { ...state.generatedFilesMap };
+        const newFilesMap = { ...(state.generatedFilesMap || {}) };
         
         for (const filePath of filePaths) {
             delete newFilesMap[filePath];
@@ -109,7 +110,7 @@ export class FileManager implements IFileManager {
 
     getGeneratedFilePaths(): string[] {
         const state = this.stateManager.getState();
-        return Object.keys(state.generatedFilesMap);
+        return Object.keys(state.generatedFilesMap || {});
     }
 
     getTemplateDetails(): TemplateDetails | undefined {
@@ -119,11 +120,11 @@ export class FileManager implements IFileManager {
 
     getGeneratedFilesMap(): Record<string, FileOutputType> {
         const state = this.stateManager.getState();
-        return state.generatedFilesMap;
+        return state.generatedFilesMap || {};
     }
 
     getGeneratedFiles(): FileOutputType[] {
         const state = this.stateManager.getState();
-        return Object.values(state.generatedFilesMap);
+        return Object.values(state.generatedFilesMap || {});
     }
 }

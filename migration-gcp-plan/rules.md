@@ -14,8 +14,8 @@ These items **must** be consulted before resuming work on Strategy B. Update the
 
 | ID | Summary | Status | Owner | Last Update | Notes |
 | --- | --- | --- | --- | --- | --- |
-| P1 | Replace stub agent loader with Node-compatible shim that resolves `cloudflare:` imports without breaking WebSocket/agent flow | blocked | - | 2025-02-17 | Current attempt via `gcp-agent-manager.js` hits `ERR_INTERNAL_ASSERTION` when loading `agents` package; need deterministic shim or bundled worker artifact. |
-| P2 | Restore Cloudflare-equivalent agent bootstrap loop (single template load → blueprint → phase execution) | blocked | - | 2025-02-17 | Agents API currently loops template fetch twice and drops WebSocket after `ERR_EMPTY_RESPONSE`; fix depends on P1. |
+| P1 | Load real SmartCodeGeneratorAgent in Node adapter; implement Durable Object storage/alarms on GCP equivalents | in-progress | Codex | 2025-02-19 | Firestore-backed persistence + ADC token fallback landed. Remaining: externalize alarm scheduler (Cloud Tasks/Scheduler) and document required GCP creds setup for env operators. |
+| P2 | Recreate sandbox/preview pipeline via Cloud Run (templates ? build ? signed URL) | pending | - | 2025-02-18 | Port SandboxSdkClient to Cloud Run Jobs + GCS artifacts. Depends on P1 environment hooks. |
 | P3 | Verify WebSocket handshake + streaming mirror Cloudflare sequence (NDJSON + WS events) once P1/P2 land | pending | - | - | Execute full Step-by-Step flow in description; log verification results in `strategy-b-implementation-status.md`. |
 | P4 | Run combined Hono API + Vite frontend container on Cloud Run (replace workerd runtime) | in-progress | Codex | 2025-02-17 | Dockerfile updated to build/control-plane image (`container/Dockerfile.workerd`); needs image build & push → Terraform apply with `runtime_image=.../control-plane:latest` → verify WebSocket + SPA fallback. |
 
