@@ -2124,7 +2124,7 @@ vite.config.ts
             }
 
             // Step 7: Get deployment URL (use short service name)
-            const deployedUrl = `https://${shortServiceName}.${projectId}.appspot.com`;
+            const deployedUrl = `https://${shortServiceName}-dot-${projectId}.appspot.com`;
             const versionId = `v${Date.now()}`;
 
             // Clean up service account key file

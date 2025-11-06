@@ -48,7 +48,7 @@ export class AppEngineDeployer {
 			const shortServiceName = await generateShortServiceName(config.appName);
 			
 			// Generate deployment URL using short service name
-			const url = `https://${shortServiceName}.${this.projectId}.appspot.com`;
+			const url = `https://${shortServiceName}-dot-${this.projectId}.appspot.com`;
 			const versionId = `v${Date.now()}`;
 
 			logger.info('App Engine deployment placeholder', {
