@@ -50,7 +50,7 @@ import { GitHubService } from '../github/GitHubService';
 import { getPreviewDomain } from '../../utils/urls';
 import { isDev } from 'worker/utils/envs';
 import { FileOutputType } from 'worker/agents/schemas';
-import { generateShortServiceName, generateStaticAppYaml } from '../deployer/appengine-yaml-generator';
+import { generateShortServiceName, generateStaticAppYaml, generateFullStackAppYaml, type BackendConfig } from '../deployer/appengine-yaml-generator';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
 
@@ -2020,12 +2020,84 @@ export class SandboxSdkClient extends BaseSandboxService {
     }
 
     /**
-     * Deploy static frontend to Google App Engine
-     * Phase 1: Frontend-only deployment with no backend dependencies
+     * Detect if application has a backend API
+     * Checks for common backend entry points and API routes
+     */
+    private async detectBackend(instanceId: string): Promise<{ hasBackend: boolean; entryPoint?: string; config?: BackendConfig }> {
+        try {
+            const sandbox = this.getSandbox();
+            const commonEntryPoints = [
+                'server.js',
+                'server.ts',
+                'index.js',
+                'index.ts',
+                'src/server.js',
+                'src/server.ts',
+                'src/index.js',
+                'src/index.ts',
+                'backend/server.js',
+                'backend/index.js',
+                'api/server.js',
+                'api/index.js',
+            ];
+
+            // Check for entry point files
+            for (const entryPoint of commonEntryPoints) {
+                const result = await sandbox.readFile(`${instanceId}/${entryPoint}`);
+                if (result.success && result.content) {
+                    // Check if it's a Node.js server file (has express, fastify, or listen)
+                    const content = result.content.toLowerCase();
+                    if (content.includes('express') || content.includes('fastify') || 
+                        content.includes('listen') || content.includes('createServer')) {
+                        this.logger.info('Backend detected', { instanceId, entryPoint });
+                        return {
+                            hasBackend: true,
+                            entryPoint,
+                            config: {
+                                entryPoint,
+                                port: 8080, // App Engine standard port
+                            },
+                        };
+                    }
+                }
+            }
+
+            // Check for API routes directory
+            const apiRoutesCheck = await sandbox.readFile(`${instanceId}/src/api`);
+            if (apiRoutesCheck.success) {
+                // Check for routes files
+                const routesFiles = ['routes.js', 'routes.ts', 'index.js', 'index.ts'];
+                for (const routesFile of routesFiles) {
+                    const routesResult = await sandbox.readFile(`${instanceId}/src/api/${routesFile}`);
+                    if (routesResult.success && routesResult.content) {
+                        // Found API routes, assume backend exists
+                        this.logger.info('API routes detected', { instanceId, routesFile });
+                        return {
+                            hasBackend: true,
+                            entryPoint: 'server.js', // Default entry point
+                            config: {
+                                entryPoint: 'server.js',
+                                port: 8080,
+                            },
+                        };
+                    }
+                }
+            }
+
+            return { hasBackend: false };
+        } catch (error) {
+            this.logger.warn('Error detecting backend', error, { instanceId });
+            return { hasBackend: false };
+        }
+    }
+
+    /**
+     * Deploy application to Google App Engine
+     * Phase 2: Supports both frontend-only and full-stack (frontend + backend) deployments
      */
     async deployToAppEngine(instanceId: string): Promise<DeploymentResult> {
         try {
-            this.logger.info('Starting App Engine static frontend deployment', { instanceId });
+            this.logger.info('Starting App Engine deployment', { instanceId });
 
             // Get project metadata
             const metadata = await this.getInstanceMetadata(instanceId);
@@ -2040,37 +2112,101 @@ export class SandboxSdkClient extends BaseSandboxService {
             }
 
             const sandbox = this.getSandbox();
-            this.logger.info('Processing static frontend deployment', { instanceId });
 
-            // Step 1: Build frontend only (no backend build)
+            // Step 1: Detect if application has backend
+            this.logger.info('Detecting backend', { instanceId });
+            const backendDetection = await this.detectBackend(instanceId);
+            const hasBackend = backendDetection.hasBackend;
+            const backendConfig = backendDetection.config;
+
+            this.logger.info('Backend detection result', { 
+                instanceId, 
+                hasBackend, 
+                entryPoint: backendConfig?.entryPoint 
+            });
+
+            // Step 2: Build frontend
             this.logger.info('Building frontend');
             const buildResult = await this.executeCommand(instanceId, 'npm run build');
             if (buildResult.exitCode !== 0) {
                 throw new Error(`Frontend build failed: ${buildResult.stderr}`);
             }
 
-            // Step 2: Read static files from dist directory
+            // Step 3: Build backend if it exists
+            if (hasBackend && backendConfig?.entryPoint) {
+                this.logger.info('Building backend', { entryPoint: backendConfig.entryPoint });
+                // Check if backend needs building (TypeScript, etc.)
+                const entryPointPath = backendConfig.entryPoint;
+                if (entryPointPath.endsWith('.ts')) {
+                    // TypeScript backend - may need compilation
+                    // For now, assume it's handled by build process or runtime
+                    this.logger.info('TypeScript backend detected, assuming runtime compilation');
+                }
+            }
+
+            // Step 4: Read static files from dist directory (for frontend)
             this.logger.info('Reading static files');
             const distPath = `${instanceId}/dist`;
-            // Note: staticFiles variable is kept for future use but not currently needed for gcloud deployment
             await this.readStaticFilesFromSandbox(distPath);
 
-            // Step 3: Generate short service name for App Engine (to avoid domain size limitations)
+            // Step 5: Generate short service name for App Engine (to avoid domain size limitations)
             const shortServiceName = await generateShortServiceName(projectName);
             this.logger.info('Generated short service name', { 
                 originalName: projectName, 
                 shortName: shortServiceName 
             });
 
-            // Step 4: Generate app.yaml for static site
-            const appYaml = generateStaticAppYaml(shortServiceName);
+            // Step 6: Generate app.yaml based on application type
+            let appYaml: string;
+            if (hasBackend && backendConfig) {
+                // Full-stack application (frontend + backend)
+                this.logger.info('Generating full-stack app.yaml', { entryPoint: backendConfig.entryPoint });
+                appYaml = generateFullStackAppYaml(shortServiceName, backendConfig);
+            } else {
+                // Frontend-only application
+                this.logger.info('Generating static frontend app.yaml');
+                appYaml = generateStaticAppYaml(shortServiceName);
+            }
 
-            // Step 5: Write app.yaml to sandbox root
+            // Step 7: Write app.yaml to sandbox root
             await sandbox.writeFile(`${instanceId}/app.yaml`, appYaml);
 
-            // Step 5.5: Create .gcloudignore to deploy only dist/client folder and app.yaml
-            // This ensures only production build files are uploaded, not source code
-            const gcloudignore = `# Exclude everything
+            // Step 8: Create .gcloudignore based on application type
+            let gcloudignore: string;
+            if (hasBackend && backendConfig) {
+                // Full-stack: Include backend files, exclude source but keep compiled
+                gcloudignore = `# Exclude everything
+*
+
+# Include dist/client directory (frontend)
+!/dist/
+!/dist/client/
+!/dist/client/**
+
+# Include backend entry point and necessary files
+!/${backendConfig.entryPoint || 'server.js'}
+!/package.json
+!/package-lock.json
+
+# Include app.yaml
+!/app.yaml
+
+# Explicitly exclude sensitive files and source
+.gcloud-key.json
+.env
+.env.local
+node_modules/
+src/
+.git/
+*.ts
+*.tsx
+*.jsx
+tsconfig.json
+vite.config.ts
+`;
+            } else {
+                // Frontend-only: Only include dist/client
+                gcloudignore = `# Exclude everything
 *
 
 # Include only the dist/client directory and app.yaml
@@ -2094,10 +2230,11 @@ package-lock.json
 tsconfig.json
 vite.config.ts
 `;
+            }
             await sandbox.writeFile(`${instanceId}/.gcloudignore`, gcloudignore);
-            this.logger.info('Created .gcloudignore to deploy only dist/client folder');
+            this.logger.info('Created .gcloudignore', { hasBackend });
 
-            // Step 6: Authenticate gcloud with service account key
+            // Step 9: Authenticate gcloud with service account key
             // Write service account key to a temporary file
             const keyPath = `.gcloud-key.json`;
             const serviceAccountJson = Buffer.from(serviceAccountKey, 'base64').toString('utf8');
@@ -2113,7 +2250,7 @@ vite.config.ts
                 throw new Error(`Failed to authenticate gcloud: ${authResult.stderr}`);
             }
 
-            // Step 6: Deploy to App Engine using gcloud CLI
+            // Step 10: Deploy to App Engine using gcloud CLI
             this.logger.info('Deploying to App Engine via gcloud');
             const deployResult = await this.executeCommand(
                 instanceId,
@@ -2123,25 +2260,28 @@ vite.config.ts
                 throw new Error(`App Engine deployment failed: ${deployResult.stderr}`);
             }
 
-            // Step 7: Get deployment URL (use short service name)
+            // Step 11: Get deployment URL (use short service name)
             const deployedUrl = `https://${shortServiceName}-dot-${projectId}.appspot.com`;
             const versionId = `v${Date.now()}`;
 
             // Clean up service account key file
             await this.executeCommand(instanceId, `rm -f ${keyPath}`);
 
+            const deploymentType = hasBackend ? 'full-stack (frontend + backend)' : 'static frontend';
             this.logger.info('App Engine deployment successful', {
                 instanceId,
                 deployedUrl,
                 versionId,
+                deploymentType,
+                hasBackend,
             });
 
             return {
                 success: true,
-                message: `Successfully deployed static frontend to App Engine`,
+                message: `Successfully deployed ${deploymentType} to App Engine`,
                 deployedUrl,
                 deploymentId: versionId,
-                output: `Deployed to ${deployedUrl}`,
+                output: `Deployed ${deploymentType} to ${deployedUrl}`,
             };
         } catch (error) {
             this.logger.error('deployToAppEngine failed', error, { instanceId });

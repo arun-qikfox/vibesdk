@@ -2,7 +2,8 @@ export type DeploymentTarget = 'cloudflare' | 'app_engine';
 
 export interface DeploymentConfig {
 	target: DeploymentTarget;
-	isStaticFrontend: boolean; // For Phase 1, always true
+	isStaticFrontend: boolean; // Phase 1: static frontend only, Phase 2+: can be false if backend detected
+	hasBackend?: boolean; // Phase 2: indicates if backend API is present
 }
 
 export function getDeploymentConfig(env: Env): DeploymentConfig {
