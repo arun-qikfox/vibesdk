@@ -69,6 +69,10 @@ worker/
 3. **Extend, Don't Replace**: Add new methods, don't modify existing ones
 4. **Update Documentation**: Add changes to relevant docs in this folder
 5. **Test Both Paths**: Verify Cloudflare and GCP deployments work
+6. **Linting**: Ensure all TypeScript linting errors are resolved before committing
+   - Run `npx tsc --noEmit` or check build output
+   - Remove unused variables, imports, and parameters
+   - Fix all type errors and warnings
 
 ### Rule 8: Environment Variables
 - **GCP Variables**: All prefixed with `GOOGLE_` or `GCP_`
@@ -120,6 +124,9 @@ Before implementing any GCP-related feature:
 - [ ] Added environment variables to `environment-variables.md`
 - [ ] Tested both deployment paths (if applicable)
 - [ ] **Verified**: No files in `vibe-sdk-unchanged/` were modified
+- [ ] **Linting**: All TypeScript linting errors resolved (run `npx tsc --noEmit` or check build output)
+- [ ] **No Unused Variables**: Removed all unused variables, imports, and parameters
+- [ ] **Type Safety**: All types are properly defined and used
 
 ## 🔍 Decision Tree
 

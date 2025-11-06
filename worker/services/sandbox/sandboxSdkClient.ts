@@ -2055,7 +2055,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                             entryPoint,
                             config: {
                                 entryPoint,
-                                port: 8080, // App Engine standard port
+                                // Port is automatically set by App Engine via PORT env variable
                             },
                         };
                     }
@@ -2077,7 +2077,7 @@ export class SandboxSdkClient extends BaseSandboxService {
                             entryPoint: 'server.js', // Default entry point
                             config: {
                                 entryPoint: 'server.js',
-                                port: 8080,
+                                // Port is automatically set by App Engine via PORT env variable
                             },
                         };
                     }

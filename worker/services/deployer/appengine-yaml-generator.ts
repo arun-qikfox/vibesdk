@@ -7,7 +7,7 @@
 
 export interface BackendConfig {
 	entryPoint?: string; // e.g., "server.js", "index.js", "src/server.ts"
-	port?: number; // Default: 8080 (App Engine standard)
+	// Note: port is not needed - App Engine Standard automatically sets PORT env variable
 	envVariables?: Record<string, string>;
 }
 
@@ -85,14 +85,16 @@ export async function generateShortServiceName(appName: string): Promise<string>
  * Generate app.yaml for backend API deployment to Google App Engine
  * Configured for Node.js runtime with API endpoints
  * 
+ * Note: Port is automatically handled by App Engine Standard via PORT environment variable
+ * 
  * @param shortServiceName - Shortened service name (use generateShortServiceName to generate)
- * @param config - Backend configuration (entry point, port, env variables)
+ * @param config - Backend configuration (entry point, env variables)
  * @returns YAML string for app.yaml configuration file
  */
 export function generateBackendAppYaml(shortServiceName: string, config: BackendConfig = {}): string {
 	const entryPoint = config.entryPoint || 'server.js';
-	const port = config.port || 8080;
 	const envVars = config.envVariables || {};
+	// Note: Port is automatically handled by App Engine Standard via PORT environment variable
 
 	// Build environment variables section
 	const envVarsSection = Object.keys(envVars).length > 0
@@ -129,8 +131,8 @@ handlers:
  */
 export function generateFullStackAppYaml(shortServiceName: string, backendConfig: BackendConfig = {}): string {
 	const entryPoint = backendConfig.entryPoint || 'server.js';
-	const port = backendConfig.port || 8080;
 	const envVars = backendConfig.envVariables || {};
+	// Note: Port is automatically handled by App Engine Standard via PORT environment variable
 
 	// Build environment variables section
 	const envVarsSection = Object.keys(envVars).length > 0
