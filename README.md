@@ -470,6 +470,8 @@ Want to contribute to Cloudflare VibeSDK? Here's how:
 
 Cloudflare VibeSDK now supports deploying generated applications to **Google App Engine (GAE)** in addition to Cloudflare Workers. This enables you to deploy platform-independent frontend applications to GCP.
 
+> **📚 For complete GCP documentation, architecture, and setup guides, see [docs/gcp-support/](./docs/gcp-support/)**
+
 ### 🔑 Required Environment Variables
 
 To enable GCP App Engine deployment, you need to configure the following environment variables:
