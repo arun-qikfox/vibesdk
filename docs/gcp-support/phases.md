@@ -123,7 +123,59 @@ This document outlines the phased approach for implementing Google App Engine de
 - ✅ Backend code is platform-independent
 - ✅ No Cloudflare-specific dependencies required
 - ✅ Support for standard Node.js frameworks (Express, Fastify)
+- ✅ Support for Hono-based Cloudflare Worker apps (via wrangler.jsonc parsing)
 - ✅ Environment variable management via app.yaml
+
+### Phase 2.5: Hono Full-Stack Support (COMPLETED)
+
+#### Objectives
+- Detect Hono-based full-stack applications via wrangler.jsonc
+- Parse Cloudflare Worker configuration to extract deployment settings
+- Generate App Engine app.yaml dynamically based on wrangler.jsonc
+
+#### Implementation Details
+
+##### 2.5.1 Wrangler Configuration Parsing
+- ✅ Parse `wrangler.jsonc` to detect Hono apps
+- ✅ Extract `main` field (entry point, e.g., `index.js` → `worker/index.js`)
+- ✅ Extract `assets.directory` (client location, e.g., `../client` → `dist/client`)
+- ✅ Extract `assets.run_worker_first` (API routes, e.g., `["/api/*"]`)
+- ✅ Extract `assets.not_found_handling` (SPA routing flag)
+
+##### 2.5.2 Path Resolution
+- ✅ Resolve relative paths correctly (`../client` from `worker/wrangler.jsonc` → `client/` or `dist/client/`)
+- ✅ Handle wrangler.jsonc in root or worker/ directory
+- ✅ Verify entry point exists before deployment
+
+##### 2.5.3 Hono-Specific app.yaml Generation
+- ✅ Generate handlers with correct order:
+  1. Static assets (most specific)
+  2. API routes (from `run_worker_first`)
+  3. SPA routing or backend catch-all (least specific)
+- ✅ Use resolved entry point in `entrypoint` field
+- ✅ Use resolved client directory in static file handlers
+
+##### 2.5.4 Deployment Configuration
+- ✅ Update `.gcloudignore` to include:
+  - Worker entry point (e.g., `worker/index.js`)
+  - Client directory (e.g., `dist/client/`)
+  - Package files (`package.json`, `package-lock.json`)
+  - Exclude `wrangler.jsonc` (not needed for App Engine)
+
+#### Key Features
+- ✅ Automatic detection of Hono apps via wrangler.jsonc
+- ✅ Dynamic app.yaml generation based on wrangler.jsonc configuration
+- ✅ Proper handler ordering (static assets → API routes → catch-all)
+- ✅ Backward compatible with Phase 2 (Express/Fastify) and Phase 1 (static frontend)
+- ✅ Warning message about Hono Worker code compatibility with Node.js runtime
+
+#### Important Notes
+- **Code Compatibility**: Hono Worker code may need adaptation for Node.js runtime
+  - Cloudflare Workers runtime differs from Node.js
+  - May need Hono Node.js adapter or Express wrapper
+  - User must ensure their Hono app works on Node.js
+- **No Automatic Conversion**: This implementation does NOT convert Hono Worker code to Express
+- **Path Resolution**: Critical to correctly resolve relative paths from wrangler.jsonc location
 
 ---
 

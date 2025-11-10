@@ -5,6 +5,8 @@ This directory contains all documentation, architecture references, and guidelin
 ## 📚 Documentation Structure
 
 - **[README.md](./README.md)** - This file (overview and quick links)
+- **[multi-platform-deployment-strategy.md](./multi-platform-deployment-strategy.md)** - ⭐ **Executive Summary** for CTO/Architect review (strategic overview, core dependencies, implementation roadmap)
+- **[cloudflare-dependency-audit.md](./cloudflare-dependency-audit.md)** - Detailed technical audit of all Cloudflare dependencies (why used, purpose, removal strategy)
 - **[architecture.md](./architecture.md)** - Reference architecture for GCP deployment flow
 - **[rules.md](./rules.md)** - Decision rules and criteria for deployment target selection
 - **[phases.md](./phases.md)** - Implementation phases and roadmap
@@ -17,11 +19,13 @@ This directory contains all documentation, architecture references, and guidelin
 
 ## 🎯 Quick Start
 
-1. **New to GCP Support?** Start with [quick-start.md](./quick-start.md) for 5-minute setup
-2. **Planning Changes?** Check [decision-tree.md](./decision-tree.md) and [rules.md](./rules.md)
-3. **Understanding Flow?** Read [architecture.md](./architecture.md) for detailed flow
-4. **Implementing Features?** Review [phases.md](./phases.md) for the implementation roadmap
-5. **Setting Up?** Follow [environment-variables.md](./environment-variables.md) for configuration
+1. **CTO/Architect Review?** Start with [multi-platform-deployment-strategy.md](./multi-platform-deployment-strategy.md) for strategic overview
+2. **Technical Deep Dive?** Review [cloudflare-dependency-audit.md](./cloudflare-dependency-audit.md) for detailed dependency analysis
+3. **New to GCP Support?** Start with [quick-start.md](./quick-start.md) for 5-minute setup
+4. **Planning Changes?** Check [decision-tree.md](./decision-tree.md) and [rules.md](./rules.md)
+5. **Understanding Flow?** Read [architecture.md](./architecture.md) for detailed flow
+6. **Implementing Features?** Review [phases.md](./phases.md) for the implementation roadmap
+7. **Setting Up?** Follow [environment-variables.md](./environment-variables.md) for configuration
 
 ## 🔄 Current Status
 

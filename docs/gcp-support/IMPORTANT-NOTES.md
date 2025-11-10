@@ -47,12 +47,58 @@ vim vibesdk/worker/database/database.ts
 vim vibe-sdk-unchanged/worker/database/database.ts  # DON'T DO THIS!
 ```
 
+## 🚨 Critical: `vibesdk-templates-main/` Directory
+
+### **ONLY MODIFY WHEN WORKING WITH TEMPLATES**
+
+The `vibesdk-templates-main/` folder contains template files used for application code generation. This folder should **ONLY** be modified when:
+
+1. **Adding Templates**: Creating new application templates
+2. **Updating Templates**: Modifying existing template structures
+3. **Template Logic**: Changing how templates are generated or used
+
+### Rules:
+
+- ✅ **MODIFY** files in `vibesdk-templates-main/` when working on templates
+- ❌ **NEVER** modify this folder for deployment logic or configuration changes
+- ✅ **REFERENCE** this folder to understand template structure
+- ❌ **DON'T** use this folder for deployment-related code changes
+- ✅ **SEPARATE** template changes from deployment implementation
+
+### Directory Structure:
+
+- **Main Code**: `vibesdk/` - All deployment and application logic
+- **Reference Code**: `vibe-sdk-unchanged/` - Read-only reference (NEVER modify)
+- **Templates**: `vibesdk-templates-main/` - Template files (modify only for templates)
+- **Documentation**: `docs/gcp-support/` - All GCP documentation
+
+### When to Use `vibesdk-templates-main/`:
+
+1. **Template Development**: Adding or modifying application templates
+2. **Template Structure**: Understanding how templates are organized
+3. **Code Generation**: Modifying template generation logic
+4. **NOT for**: Deployment configuration, deployment logic, or runtime code
+
+### Example Workflow:
+
+```bash
+# ✅ CORRECT: Modify templates in templates directory
+vim vibesdk-templates-main/templates/react-app/template.json
+
+# ✅ CORRECT: Modify deployment logic in main directory
+vim vibesdk/worker/services/sandbox/sandboxSdkClient.ts
+
+# ❌ WRONG: Don't modify templates for deployment changes
+vim vibesdk-templates-main/worker/services/deployer/appengine-yaml-generator.ts  # DON'T DO THIS!
+```
+
 ## 📋 Other Important Notes
 
 ### Code Organization
 
 - **Main Directory**: `vibesdk/` - All modifications go here
-- **Reference Directory**: `vibe-sdk-unchanged/` - Read-only reference
+- **Reference Directory**: `vibe-sdk-unchanged/` - Read-only reference (NEVER modify)
+- **Templates Directory**: `vibesdk-templates-main/` - Template files (modify only for templates)
 - **Documentation**: `docs/gcp-support/` - All GCP documentation
 
 ### Deployment Targets

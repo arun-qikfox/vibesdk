@@ -261,9 +261,36 @@ App Engine uses `-dot-` to separate service name from project ID in URLs when us
 - **Separation**: Keeps client and server builds separate
 - **Flexibility**: Allows future backend deployment to dist/server/
 
-## 🔄 Future Architecture (Planned)
+## 🔄 Current Architecture (Phase 2 + Hono Support)
 
-### Phase 2: Backend API Deployment
+### Hono Full-Stack Deployment
+```
+┌─────────────────────────────────────┐
+│  wrangler.jsonc                     │
+│  - main: "index.js"                 │
+│  - assets.directory: "../client"   │
+│  - assets.run_worker_first: ["/api/*"]│
+└─────────────────────────────────────┘
+              │
+              ▼ (Parse & Resolve)
+┌─────────────────────────────────────┐
+│  Resolved Configuration             │
+│  - Entry: worker/index.js           │
+│  - Client: dist/client/             │
+│  - API Routes: /api/*               │
+└─────────────────────────────────────┘
+              │
+              ▼ (Generate app.yaml)
+┌─────────────────────────────────────┐
+│  App Engine Service                 │
+│  - Handlers:                        │
+│    1. Static assets → dist/client/  │
+│    2. API routes → worker/index.js  │
+│    3. SPA routing → index.html      │
+└─────────────────────────────────────┘
+```
+
+### Standard Backend API Deployment
 ```
 ┌─────────────────────────────────────┐
 │  Backend API (Node.js/Express)     │
@@ -274,7 +301,7 @@ App Engine uses `-dot-` to separate service name from project ID in URLs when us
               │
               ▼
 ┌─────────────────────────────────────┐
-│  App Engine Flexible Environment    │
+│  App Engine Standard Environment    │
 │  - Runtime: nodejs20                │
 │  - Auto-scaling                     │
 │  - Health checks                    │

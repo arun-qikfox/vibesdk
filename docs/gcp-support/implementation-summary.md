@@ -27,6 +27,10 @@ This document provides a high-level summary of the GCP App Engine deployment imp
 - ✅ React Router support (SPA routing)
 - ✅ Proper cache headers (assets cached, HTML not cached)
 - ✅ Secure deployment (.gcloudignore excludes source)
+- ✅ Hono full-stack app detection via wrangler.jsonc parsing
+- ✅ Dynamic app.yaml generation based on wrangler.jsonc configuration
+- ✅ Support for Express/Fastify backends (Phase 2)
+- ✅ Support for Hono Worker apps (Phase 2.5)
 
 ## 📁 File Changes Summary
 

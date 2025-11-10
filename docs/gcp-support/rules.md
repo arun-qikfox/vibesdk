@@ -32,6 +32,7 @@ This document defines the rules and criteria for determining when to use GCP App
 - **Deployment Logic**: Keep in `worker/services/sandbox/sandboxSdkClient.ts`
 - **Configuration**: Centralize in `worker/config/deployment-config.ts`
 - **Types**: Define in `worker/services/deployer/types.ts` (if needed)
+- **Templates**: Modify only in `vibesdk-templates-main/` directory (separate workspace)
 
 ### Rule 5: File Structure
 ```
@@ -60,6 +61,21 @@ worker/
 - **Maintain backward compatibility** with Cloudflare deployment
 - **Test both paths** when making changes
 - **Compare with original**: When in doubt, compare your changes with files in `vibe-sdk-unchanged/` to ensure compatibility
+
+### Rule 6.5: Template Files Directory
+- **ONLY modify** files in `vibesdk-templates-main/` directory when modifying templates
+- **Purpose**: Contains template files used for application code generation
+- **Location**: Separate workspace folder (`vibesdk-templates-main/`)
+- **When to Modify**:
+  - Adding new application templates
+  - Updating existing template structures
+  - Modifying template generation logic
+- **When NOT to Modify**:
+  - Deployment logic changes (use `vibesdk/` instead)
+  - Configuration changes (use `vibesdk/` instead)
+  - Runtime code changes (use `vibesdk/` instead)
+- **Reference Only**: Use for understanding template structure, not for deployment logic
+- **Separation**: Template changes are separate from deployment implementation
 
 ## 🔧 Implementation Rules
 
@@ -100,9 +116,13 @@ worker/
    - This folder is **READ-ONLY** and exists only for reference
    - Used for comparison, debugging, and ensuring no breaking changes
    - Any modifications to original files must be made in the main `vibesdk/` directory
-3. **Hardcode Paths**: Always use configuration or environment variables
-4. **Skip Testing**: Always test both Cloudflare and GCP paths
-5. **Break Existing Flow**: Cloudflare deployment must continue working
+3. **Modify Templates Incorrectly**: **NEVER** modify `vibesdk-templates-main/` for non-template changes
+   - This folder is **ONLY** for template modifications
+   - Deployment logic, configuration, and runtime code go in `vibesdk/`
+   - Template changes are separate from deployment implementation
+4. **Hardcode Paths**: Always use configuration or environment variables
+5. **Skip Testing**: Always test both Cloudflare and GCP paths
+6. **Break Existing Flow**: Cloudflare deployment must continue working
 
 ### ✅ Do:
 1. **Use Shared Utilities**: Import from centralized modules
@@ -124,6 +144,8 @@ Before implementing any GCP-related feature:
 - [ ] Added environment variables to `environment-variables.md`
 - [ ] Tested both deployment paths (if applicable)
 - [ ] **Verified**: No files in `vibe-sdk-unchanged/` were modified
+- [ ] **Templates**: If modifying templates, changes made in `vibesdk-templates-main/` only
+- [ ] **Templates**: If NOT modifying templates, verified `vibesdk-templates-main/` was not touched
 - [ ] **Linting**: All TypeScript linting errors resolved (run `npx tsc --noEmit` or check build output)
 - [ ] **No Unused Variables**: Removed all unused variables, imports, and parameters
 - [ ] **Type Safety**: All types are properly defined and used
