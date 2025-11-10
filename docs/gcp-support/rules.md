@@ -89,6 +89,13 @@ worker/
    - Run `npx tsc --noEmit` or check build output
    - Remove unused variables, imports, and parameters
    - Fix all type errors and warnings
+7. **Testing Requirements**: All changes must be properly tested before committing
+   - **Build Verification**: Run `bun run build` or `npm run build` to ensure TypeScript compilation succeeds
+   - **Lint Verification**: Run `bun run lint` or check for linting errors in build output
+   - **No Unused Code**: Remove all unused functions, variables, imports, and parameters
+   - **Type Safety**: Ensure all types are properly defined and used
+   - **Error Handling**: Verify error handling is appropriate for all code paths
+   - **Logging**: Ensure appropriate logging is in place for debugging
 
 ### Rule 8: Environment Variables
 - **GCP Variables**: All prefixed with `GOOGLE_` or `GCP_`
@@ -149,6 +156,11 @@ Before implementing any GCP-related feature:
 - [ ] **Linting**: All TypeScript linting errors resolved (run `npx tsc --noEmit` or check build output)
 - [ ] **No Unused Variables**: Removed all unused variables, imports, and parameters
 - [ ] **Type Safety**: All types are properly defined and used
+- [ ] **Build Verification**: Ran `bun run build` or `npm run build` successfully
+- [ ] **Lint Verification**: Ran `bun run lint` or verified no linting errors
+- [ ] **No Unused Code**: Removed all unused functions, variables, imports, and parameters
+- [ ] **Error Handling**: Verified error handling is appropriate for all code paths
+- [ ] **Logging**: Ensured appropriate logging is in place for debugging
 
 ## 🔍 Decision Tree
 
