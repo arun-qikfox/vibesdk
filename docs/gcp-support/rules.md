@@ -32,7 +32,7 @@ This document defines the rules and criteria for determining when to use GCP App
 - **Deployment Logic**: Keep in `worker/services/sandbox/sandboxSdkClient.ts`
 - **Configuration**: Centralize in `worker/config/deployment-config.ts`
 - **Types**: Define in `worker/services/deployer/types.ts` (if needed)
-- **Templates**: Modify only in `vibesdk-templates-main/` directory (separate workspace)
+- **Templates**: Modify only in `qikai-templates/` directory (separate workspace)
 
 ### Rule 5: File Structure
 ```
@@ -63,9 +63,9 @@ worker/
 - **Compare with original**: When in doubt, compare your changes with files in `vibe-sdk-unchanged/` to ensure compatibility
 
 ### Rule 6.5: Template Files Directory
-- **ONLY modify** files in `vibesdk-templates-main/` directory when modifying templates
+- **ONLY modify** files in `qikai-templates/` directory when modifying templates
 - **Purpose**: Contains template files used for application code generation
-- **Location**: Separate workspace folder (`vibesdk-templates-main/`)
+- **Location**: Separate workspace folder (`qikai-templates/`)
 - **When to Modify**:
   - Adding new application templates
   - Updating existing template structures
@@ -116,7 +116,7 @@ worker/
    - This folder is **READ-ONLY** and exists only for reference
    - Used for comparison, debugging, and ensuring no breaking changes
    - Any modifications to original files must be made in the main `vibesdk/` directory
-3. **Modify Templates Incorrectly**: **NEVER** modify `vibesdk-templates-main/` for non-template changes
+3. **Modify Templates Incorrectly**: **NEVER** modify `qikai-templates/` for non-template changes
    - This folder is **ONLY** for template modifications
    - Deployment logic, configuration, and runtime code go in `vibesdk/`
    - Template changes are separate from deployment implementation
@@ -144,8 +144,8 @@ Before implementing any GCP-related feature:
 - [ ] Added environment variables to `environment-variables.md`
 - [ ] Tested both deployment paths (if applicable)
 - [ ] **Verified**: No files in `vibe-sdk-unchanged/` were modified
-- [ ] **Templates**: If modifying templates, changes made in `vibesdk-templates-main/` only
-- [ ] **Templates**: If NOT modifying templates, verified `vibesdk-templates-main/` was not touched
+- [ ] **Templates**: If modifying templates, changes made in `qikai-templates/` only
+- [ ] **Templates**: If NOT modifying templates, verified `qikai-templates/` was not touched
 - [ ] **Linting**: All TypeScript linting errors resolved (run `npx tsc --noEmit` or check build output)
 - [ ] **No Unused Variables**: Removed all unused variables, imports, and parameters
 - [ ] **Type Safety**: All types are properly defined and used

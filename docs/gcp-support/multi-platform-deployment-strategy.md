@@ -352,7 +352,7 @@ Enable generated applications to deploy to **any cloud platform** (Google Cloud 
 
 - **GCP Service Account**: For App Engine deployments
 - **AWS Credentials**: For AWS deployments (optional)
-- **Template Updates**: May require updates to `vibesdk-templates-main/`
+- **Template Updates**: May require updates to `qikai-templates/`
 
 ---
 

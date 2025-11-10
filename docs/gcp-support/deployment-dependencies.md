@@ -399,7 +399,7 @@ export function getEnv(key: string): string | undefined {
 
 - **GCP Service Account**: For App Engine deployments
 - **AWS Credentials**: For AWS deployments (optional)
-- **Template Updates**: May require updates to `vibesdk-templates-main/`
+- **Template Updates**: May require updates to `qikai-templates/`
 
 ---
 

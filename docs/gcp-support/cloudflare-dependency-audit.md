@@ -66,7 +66,7 @@ This document provides a comprehensive audit of all Cloudflare-specific dependen
 
 ### 1.2 Template Files
 
-**Location**: Templates in `vibesdk-templates-main/` (referenced but not directly modified)
+**Location**: Templates in `qikai-templates/` (referenced but not directly modified)
 
 **Dependencies Found**:
 - Templates likely include `wrangler.jsonc` configuration files

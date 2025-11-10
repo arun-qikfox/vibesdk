@@ -47,11 +47,11 @@ vim vibesdk/worker/database/database.ts
 vim vibe-sdk-unchanged/worker/database/database.ts  # DON'T DO THIS!
 ```
 
-## 🚨 Critical: `vibesdk-templates-main/` Directory
+## 🚨 Critical: `qikai-templates/` Directory
 
 ### **ONLY MODIFY WHEN WORKING WITH TEMPLATES**
 
-The `vibesdk-templates-main/` folder contains template files used for application code generation. This folder should **ONLY** be modified when:
+The `qikai-templates/` folder contains template files used for application code generation. This folder should **ONLY** be modified when:
 
 1. **Adding Templates**: Creating new application templates
 2. **Updating Templates**: Modifying existing template structures
@@ -59,7 +59,7 @@ The `vibesdk-templates-main/` folder contains template files used for applicatio
 
 ### Rules:
 
-- ✅ **MODIFY** files in `vibesdk-templates-main/` when working on templates
+- ✅ **MODIFY** files in `qikai-templates/` when working on templates
 - ❌ **NEVER** modify this folder for deployment logic or configuration changes
 - ✅ **REFERENCE** this folder to understand template structure
 - ❌ **DON'T** use this folder for deployment-related code changes
@@ -69,10 +69,10 @@ The `vibesdk-templates-main/` folder contains template files used for applicatio
 
 - **Main Code**: `vibesdk/` - All deployment and application logic
 - **Reference Code**: `vibe-sdk-unchanged/` - Read-only reference (NEVER modify)
-- **Templates**: `vibesdk-templates-main/` - Template files (modify only for templates)
+- **Templates**: `qikai-templates/` - Template files (modify only for templates)
 - **Documentation**: `docs/gcp-support/` - All GCP documentation
 
-### When to Use `vibesdk-templates-main/`:
+### When to Use `qikai-templates/`:
 
 1. **Template Development**: Adding or modifying application templates
 2. **Template Structure**: Understanding how templates are organized
@@ -83,13 +83,13 @@ The `vibesdk-templates-main/` folder contains template files used for applicatio
 
 ```bash
 # ✅ CORRECT: Modify templates in templates directory
-vim vibesdk-templates-main/templates/react-app/template.json
+vim qikai-templates/templates/react-app/template.json
 
 # ✅ CORRECT: Modify deployment logic in main directory
 vim vibesdk/worker/services/sandbox/sandboxSdkClient.ts
 
 # ❌ WRONG: Don't modify templates for deployment changes
-vim vibesdk-templates-main/worker/services/deployer/appengine-yaml-generator.ts  # DON'T DO THIS!
+vim qikai-templates/worker/services/deployer/appengine-yaml-generator.ts  # DON'T DO THIS!
 ```
 
 ## 📋 Other Important Notes
@@ -98,7 +98,7 @@ vim vibesdk-templates-main/worker/services/deployer/appengine-yaml-generator.ts 
 
 - **Main Directory**: `vibesdk/` - All modifications go here
 - **Reference Directory**: `vibe-sdk-unchanged/` - Read-only reference (NEVER modify)
-- **Templates Directory**: `vibesdk-templates-main/` - Template files (modify only for templates)
+- **Templates Directory**: `qikai-templates/` - Template files (modify only for templates)
 - **Documentation**: `docs/gcp-support/` - All GCP documentation
 
 ### Deployment Targets
