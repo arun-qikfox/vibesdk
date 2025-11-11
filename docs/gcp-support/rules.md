@@ -14,7 +14,7 @@ This document defines the rules and criteria for determining when to use GCP App
   - Application is frontend-only (React, Vue, etc.)
   - No Cloudflare-specific features required (KV, D1, Durable Objects)
   - Platform-independent code generation is desired
-  - PostgreSQL-based backend is preferred
+  - Firestore-backed storage (via HTTP abstraction) is acceptable
 
 - **Use Cloudflare Workers** when:
   - Application requires Cloudflare-specific features
@@ -99,6 +99,7 @@ worker/
 
 ### Rule 8: Environment Variables
 - **GCP Variables**: All prefixed with `GOOGLE_` or `GCP_`
+- **Firestore Variables**: `DATA_PROVIDER`, `FIRESTORE_*`, `DATA_HTTP_*` control template storage
 - **Cloudflare Variables**: Keep existing naming (no changes)
 - **Shared Variables**: Use generic names (e.g., `DEFAULT_DEPLOYMENT_TARGET`)
 - **Documentation**: Always update `environment-variables.md`

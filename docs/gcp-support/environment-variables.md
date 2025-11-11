@@ -34,6 +34,55 @@ This document lists all environment variables required for Google App Engine dep
 - **Set As**: Regular environment variable or in `wrangler.jsonc` vars
 - **Usage**: Determines which deployment path to use
 
+### Firestore Data Provider (App Templates)
+
+Firestore is the default data store for generated apps targeting Google Cloud. These variables are read by the template runtime (Cloudflare Workers or Node) to mint OAuth tokens and talk to Firestore via REST.
+
+#### `DATA_PROVIDER` (Optional)
+- **Type**: String
+- **Values**: `'firestore'` (default) or `'http'`
+- **Description**: Selects the storage provider used by generated apps. Defaults to Firestore when omitted.
+- **Usage**: Set to `'http'` when pointing the template at a custom HTTPS data API (e.g. MongoDB Data API).
+
+#### `FIRESTORE_PROJECT_ID` (Required for `DATA_PROVIDER=firestore`)
+- **Type**: String
+- **Description**: Firestore project ID (often the same as `GOOGLE_CLOUD_PROJECT_ID`).
+
+#### `FIRESTORE_CLIENT_EMAIL` (Required for `DATA_PROVIDER=firestore`)
+- **Type**: String
+- **Description**: Service account email used to mint OAuth tokens.
+
+#### `FIRESTORE_PRIVATE_KEY_B64` (Required for `DATA_PROVIDER=firestore`)
+- **Type**: String (Base64-encoded PEM)
+- **Description**: The service account private key. Encode the entire PEM (including header/footer) as base64.
+- **Sensitive**: Yes — store as secret.
+
+#### `FIRESTORE_DATABASE_ID` (Optional)
+- **Type**: String
+- **Default**: `(default)`
+- **Description**: Firestore database ID (useful for multi-db setups).
+
+#### `FIRESTORE_API_ENDPOINT` (Optional)
+- **Type**: String
+- **Description**: Override the Firestore REST endpoint (useful for emulator testing).
+
+### HTTP Data Provider (Optional)
+
+To integrate with providers like MongoDB Atlas Data API, set `DATA_PROVIDER=http` and provide:
+
+#### `DATA_HTTP_BASE_URL` (Required when `DATA_PROVIDER=http`)
+- **Type**: String (URL)
+- **Description**: Base URL of the HTTPS service that implements the template's collection API.
+
+#### `DATA_HTTP_API_KEY` (Optional)
+- **Type**: String
+- **Description**: Bearer/API key injected via the `Authorization` header for the HTTP provider.
+- **Sensitive**: Yes.
+
+#### `DATA_HTTP_HEADERS_JSON` (Optional)
+- **Type**: String (JSON object)
+- **Description**: Additional headers (as JSON) to include in each HTTP provider request.
+
 ## 📋 Setup Instructions
 
 ### Step 1: Get Google Cloud Project ID
@@ -102,6 +151,19 @@ wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
 # Paste the base64-encoded JSON key
 ```
 
+**Set Firestore parameters (as vars/secrets):**
+```bash
+wrangler secret put FIRESTORE_PRIVATE_KEY_B64
+# Paste the base64-encoded PEM key
+wrangler secret put FIRESTORE_CLIENT_EMAIL
+# Paste the service account email
+wrangler secret put FIRESTORE_PROJECT_ID
+# Paste the Firestore project ID
+wrangler secret put DATA_PROVIDER
+# Press enter for default (firestore) or type http if using a custom API
+```
+> Note: Store `FIRESTORE_PRIVATE_KEY_B64`, `FIRESTORE_CLIENT_EMAIL`, and `FIRESTORE_PROJECT_ID` as secrets if you do not want them echoed in logs. For non-sensitive values you may use `vars` in `wrangler.jsonc` instead.
+
 **Set Default Deployment Target (optional):**
 Add to `wrangler.jsonc`:
 ```json
@@ -118,6 +180,10 @@ Add to `wrangler.jsonc`:
 GOOGLE_CLOUD_PROJECT_ID=my-awesome-project-123456
 GOOGLE_SERVICE_ACCOUNT_KEY=<base64-encoded-json-key>
 DEFAULT_DEPLOYMENT_TARGET=app_engine
+DATA_PROVIDER=firestore
+FIRESTORE_PROJECT_ID=my-awesome-project-123456
+FIRESTORE_CLIENT_EMAIL=my-service-account@my-awesome-project-123456.iam.gserviceaccount.com
+FIRESTORE_PRIVATE_KEY_B64=<base64-pem-key>
 ```
 
 #### For Production (.prod.vars)
@@ -126,6 +192,10 @@ DEFAULT_DEPLOYMENT_TARGET=app_engine
 GOOGLE_CLOUD_PROJECT_ID=my-awesome-project-123456
 GOOGLE_SERVICE_ACCOUNT_KEY=<base64-encoded-json-key>
 DEFAULT_DEPLOYMENT_TARGET=app_engine
+DATA_PROVIDER=firestore
+FIRESTORE_PROJECT_ID=my-awesome-project-123456
+FIRESTORE_CLIENT_EMAIL=my-service-account@my-awesome-project-123456.iam.gserviceaccount.com
+FIRESTORE_PRIVATE_KEY_B64=<base64-pem-key>
 ```
 
 ## 🔒 Security Best Practices
@@ -204,6 +274,15 @@ cat .dev.vars | grep GOOGLE
 | `GOOGLE_CLOUD_PROJECT_ID` | String | ✅ Yes | ❌ No | Env var or wrangler.jsonc |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` | String (Base64) | ✅ Yes | ✅ Yes | Worker Secret |
 | `DEFAULT_DEPLOYMENT_TARGET` | String | ❌ No | ❌ No | Env var or wrangler.jsonc |
+| `DATA_PROVIDER` | String | ❌ No (defaults to firestore) | ❌ No | Env var |
+| `FIRESTORE_PROJECT_ID` | String | ✅ If Firestore | ❌ No | Env var or secret |
+| `FIRESTORE_CLIENT_EMAIL` | String | ✅ If Firestore | ✅ Recommended | Secret |
+| `FIRESTORE_PRIVATE_KEY_B64` | String (Base64 PEM) | ✅ If Firestore | ✅ Yes | Secret |
+| `FIRESTORE_DATABASE_ID` | String | ❌ No | ❌ No | Env var |
+| `FIRESTORE_API_ENDPOINT` | String | ❌ No | ❌ No | Env var |
+| `DATA_HTTP_BASE_URL` | String | ✅ If `DATA_PROVIDER=http` | ❌ No | Env var |
+| `DATA_HTTP_API_KEY` | String | ❌ No | ✅ Yes | Secret |
+| `DATA_HTTP_HEADERS_JSON` | String (JSON) | ❌ No | ❌ No | Env var |
 
 ## 🔄 Variable Priority
 
@@ -233,7 +312,9 @@ OPENAI_API_KEY=sk-...
 {
   "vars": {
     "DEFAULT_DEPLOYMENT_TARGET": "app_engine",
-    "GOOGLE_CLOUD_PROJECT_ID": "my-project-123456"
+    "GOOGLE_CLOUD_PROJECT_ID": "my-project-123456",
+    "DATA_PROVIDER": "firestore",
+    "FIRESTORE_PROJECT_ID": "my-project-123456"
     // Note: GOOGLE_SERVICE_ACCOUNT_KEY should be set as secret, not here
   }
 }

@@ -308,18 +308,18 @@ App Engine uses `-dot-` to separate service name from project ID in URLs when us
 └─────────────────────────────────────┘
 ```
 
-### Phase 3: Database Integration
+### Phase 3: Data Store Integration
 ```
 ┌─────────────────────────────────────┐
-│  PostgreSQL Database                │
-│  (Cloud SQL or Cloud SQL Proxy)     │
+│  Firestore (default)                │
+│  or HTTPS data provider             │
 └─────────────────────────────────────┘
               │
               ▼
 ┌─────────────────────────────────────┐
 │  Backend API                        │
-│  - Connection pooling               │
-│  - Query execution                  │
+│  - OAuth token minting (Firestore)  │
+│  - REST/HTTP data access            │
 └─────────────────────────────────────┘
 ```
 
@@ -329,7 +329,7 @@ App Engine uses `-dot-` to separate service name from project ID in URLs when us
 |--------|-------------------|----------------|
 | **Frontend** | Workers for Platforms | Static files (dist/client/) |
 | **Backend** | Workers (serverless) | App Engine (Flexible/Standard) |
-| **Database** | D1 (SQLite) | PostgreSQL (Cloud SQL) |
+| **Data Store** | D1 (SQLite) / KV | Firestore (default) or HTTP provider |
 | **Storage** | R2, KV | Cloud Storage, Firestore |
 | **Deployment** | Wrangler CLI | gcloud CLI |
 | **Config File** | wrangler.jsonc | app.yaml |
