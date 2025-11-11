@@ -50,7 +50,12 @@ import { GitHubService } from '../github/GitHubService';
 import { getPreviewDomain } from '../../utils/urls';
 import { isDev } from 'worker/utils/envs';
 import { FileOutputType } from 'worker/agents/schemas';
-import { generateShortServiceName, generateStaticAppYaml, generateFullStackAppYaml, type BackendConfig } from '../deployer/appengine-yaml-generator';
+import { 
+	generateShortServiceName, 
+	generateHonoNodeServer,
+	generateDefaultAppYaml,
+	generateFullStackGcloudignore
+} from '../deployer/appengine-yaml-generator';
 // Export the Sandbox class in your Worker
 export { Sandbox as UserAppSandboxService, Sandbox as DeployerService} from "@cloudflare/sandbox";
 
@@ -1838,7 +1843,8 @@ export class SandboxSdkClient extends BaseSandboxService {
             
             // Get project metadata
             const metadata = await this.getInstanceMetadata(instanceId);
-            const projectName = metadata?.projectName || instanceId;
+            const instanceProjectName = metadata?.projectName;
+            const projectName = instanceProjectName || instanceId;
             
             // Get credentials from environment (secure - no exposure to external processes)
             const accountId = env.CLOUDFLARE_ACCOUNT_ID;
@@ -2020,78 +2026,6 @@ export class SandboxSdkClient extends BaseSandboxService {
     }
 
     /**
-     * Detect if application has a backend API
-     * Checks for common backend entry points and API routes
-     */
-    private async detectBackend(instanceId: string): Promise<{ hasBackend: boolean; entryPoint?: string; config?: BackendConfig }> {
-        try {
-            const sandbox = this.getSandbox();
-            const commonEntryPoints = [
-                'server.js',
-                'server.ts',
-                'index.js',
-                'index.ts',
-                'src/server.js',
-                'src/server.ts',
-                'src/index.js',
-                'src/index.ts',
-                'backend/server.js',
-                'backend/index.js',
-                'api/server.js',
-                'api/index.js',
-            ];
-
-            // Check for entry point files
-            for (const entryPoint of commonEntryPoints) {
-                const result = await sandbox.readFile(`${instanceId}/${entryPoint}`);
-                if (result.success && result.content) {
-                    // Check if it's a Node.js server file (has express, fastify, or listen)
-                    const content = result.content.toLowerCase();
-                    if (content.includes('express') || content.includes('fastify') || 
-                        content.includes('listen') || content.includes('createServer')) {
-                        this.logger.info('Backend detected', { instanceId, entryPoint });
-                        return {
-                            hasBackend: true,
-                            entryPoint,
-                            config: {
-                                entryPoint,
-                                // Port is automatically set by App Engine via PORT env variable
-                            },
-                        };
-                    }
-                }
-            }
-
-            // Check for API routes directory
-            const apiRoutesCheck = await sandbox.readFile(`${instanceId}/src/api`);
-            if (apiRoutesCheck.success) {
-                // Check for routes files
-                const routesFiles = ['routes.js', 'routes.ts', 'index.js', 'index.ts'];
-                for (const routesFile of routesFiles) {
-                    const routesResult = await sandbox.readFile(`${instanceId}/src/api/${routesFile}`);
-                    if (routesResult.success && routesResult.content) {
-                        // Found API routes, assume backend exists
-                        this.logger.info('API routes detected', { instanceId, routesFile });
-                        return {
-                            hasBackend: true,
-                            entryPoint: 'server.js', // Default entry point
-                            config: {
-                                entryPoint: 'server.js',
-                                // Port is automatically set by App Engine via PORT env variable
-                            },
-                        };
-                    }
-                }
-            }
-
-            return { hasBackend: false };
-        } catch (error) {
-            this.logger.warn('Error detecting backend', error, { instanceId });
-            return { hasBackend: false };
-        }
-    }
-
-    /**
      * Deploy application to Google App Engine
      * Phase 2: Supports both frontend-only and full-stack (frontend + backend) deployments
      */
@@ -2101,7 +2035,8 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             // Get project metadata
             const metadata = await this.getInstanceMetadata(instanceId);
-            const projectName = metadata?.projectName || instanceId;
+            const instanceProjectName = metadata?.projectName;
+            const projectName = instanceProjectName || instanceId;
 
             // Get GCP credentials from environment
             const projectId = env.GOOGLE_CLOUD_PROJECT_ID;
@@ -2113,128 +2048,154 @@ export class SandboxSdkClient extends BaseSandboxService {
 
             const sandbox = this.getSandbox();
 
-            // Step 1: Detect if application has backend
-            this.logger.info('Detecting backend', { instanceId });
-            const backendDetection = await this.detectBackend(instanceId);
-            const hasBackend = backendDetection.hasBackend;
-            const backendConfig = backendDetection.config;
+            // Step 1: Check for wrangler.jsonc to extract API routes and client directory (optional)
+            // This is only for extracting configuration, not for conditional logic
+            const wranglerFile = await sandbox.readFile(`${instanceId}/wrangler.jsonc`);
+            let apiRoutes = ['/api/*'];
+            let clientDirectory = 'dist/client';
+            
+            if (wranglerFile.success && wranglerFile.content) {
+                try {
+                    const wranglerConfig = JSON.parse(wranglerFile.content);
+                    const assets = wranglerConfig.assets || {};
+                    const clientDir = assets.directory 
+                        ? assets.directory.replace(/^\.\.\//, '').replace(/^\.\//, '')
+                        : 'dist/client';
+                    
+                    clientDirectory = clientDir.startsWith('dist/') 
+                        ? clientDir 
+                        : `dist/${clientDir}`;
+                    apiRoutes = assets.run_worker_first || ['/api/*'];
+                    
+                    this.logger.info('Extracted config from wrangler.jsonc', { 
+                        instanceId, 
+                        apiRoutes, 
+                        clientDirectory 
+                    });
+                } catch (error) {
+                    this.logger.warn('Failed to parse wrangler.jsonc, using defaults', { instanceId, error });
+                }
+            }
 
-            this.logger.info('Backend detection result', { 
-                instanceId, 
-                hasBackend, 
-                entryPoint: backendConfig?.entryPoint 
-            });
+            // Step 2: Always install @hono/node-server (provides default API support)
+            this.logger.info('Installing @hono/node-server for default API support');
+            const installResult = await this.executeCommand(
+                instanceId,
+                'npm install @hono/node-server --save'
+            );
+            if (installResult.exitCode !== 0) {
+                this.logger.warn('Failed to install @hono/node-server, continuing anyway', {
+                    stderr: installResult.stderr
+                });
+            }
 
-            // Step 2: Build frontend
+            // Step 3: Build frontend (always)
             this.logger.info('Building frontend');
             const buildResult = await this.executeCommand(instanceId, 'npm run build');
             if (buildResult.exitCode !== 0) {
                 throw new Error(`Frontend build failed: ${buildResult.stderr}`);
             }
 
-            // Step 3: Build backend if it exists
-            if (hasBackend && backendConfig?.entryPoint) {
-                this.logger.info('Building backend', { entryPoint: backendConfig.entryPoint });
-                // Check if backend needs building (TypeScript, etc.)
-                const entryPointPath = backendConfig.entryPoint;
-                if (entryPointPath.endsWith('.ts')) {
-                    // TypeScript backend - may need compilation
-                    // For now, assume it's handled by build process or runtime
-                    this.logger.info('TypeScript backend detected, assuming runtime compilation');
+            // Step 4: Try to build backend if wrangler.jsonc exists (optional, won't fail if it doesn't)
+            if (wranglerFile.success && wranglerFile.content) {
+                this.logger.info('Attempting to build Hono backend');
+                const wranglerBuild = await this.executeCommand(instanceId, 'bunx wrangler build');
+                if (wranglerBuild.exitCode !== 0) {
+                    this.logger.info('Wrangler build failed or not needed, will use fallback API handler', {
+                        stderr: wranglerBuild.stderr
+                    });
+                } else {
+                    this.logger.info('Wrangler build completed successfully');
                 }
             }
 
-            // Step 4: Read static files from dist directory (for frontend)
+            // Step 5: Always generate server.ts with default API support
+            // Server will try to load backend, fall back to default handler if not found
+            this.logger.info('Generating server.ts with default API support');
+            const serverTs = generateHonoNodeServer(projectName, 8080);
+            await sandbox.writeFile(`${instanceId}/server.ts`, serverTs);
+            this.logger.info('Generated server.ts with fallback API handler');
+
+            // Step 6: Always compile server.ts to dist/server.js
+            this.logger.info('Compiling server.ts to dist/server.js');
+            const compileResult = await this.executeCommand(
+                instanceId,
+                'npx tsc server.ts --outDir dist --target es2020 --module esnext --moduleResolution node --esModuleInterop --skipLibCheck'
+            );
+            if (compileResult.exitCode !== 0) {
+                // Try with different module format
+                const compileResult2 = await this.executeCommand(
+                    instanceId,
+                    'npx tsc server.ts --outDir dist --target es2020 --module commonjs --esModuleInterop --skipLibCheck'
+                );
+                if (compileResult2.exitCode !== 0) {
+                    throw new Error(`Failed to compile server.ts: ${compileResult2.stderr}`);
+                }
+            }
+
+            // Step 7: Always ensure package.json has start script and remove build scripts
+            // This prevents App Engine from trying to build during deployment (we deploy pre-built files)
+            const packageJsonFile = await sandbox.readFile(`${instanceId}/package.json`);
+            if (packageJsonFile.success && packageJsonFile.content) {
+                try {
+                    const pkg = JSON.parse(packageJsonFile.content);
+                    
+                    // Ensure start script exists
+                    if (!pkg.scripts?.start) {
+                        pkg.scripts = pkg.scripts || {};
+                        pkg.scripts.start = 'node dist/server.js';
+                    }
+                    
+                    // Remove build scripts to prevent App Engine from trying to build
+                    // We're deploying pre-built files, so no build is needed
+                    if (pkg.scripts) {
+                        delete pkg.scripts.build;
+                        delete pkg.scripts['gcp-build'];
+                        delete pkg.scripts['prebuild'];
+                        delete pkg.scripts['postbuild'];
+                    }
+                    
+                    await sandbox.writeFile(
+                        `${instanceId}/package.json`,
+                        JSON.stringify(pkg, null, 2)
+                    );
+                    this.logger.info('Updated package.json: added start script, removed build scripts');
+                } catch (error) {
+                    this.logger.warn('Failed to update package.json', { error });
+                }
+            }
+
+            // Step 8: Read static files from dist directory (frontend assets)
             this.logger.info('Reading static files');
             const distPath = `${instanceId}/dist`;
             await this.readStaticFilesFromSandbox(distPath);
 
-            // Step 5: Generate short service name for App Engine (to avoid domain size limitations)
+            // Step 9: Generate short service name for App Engine (to avoid domain size limitations)
             const shortServiceName = await generateShortServiceName(projectName);
-            this.logger.info('Generated short service name', { 
-                originalName: projectName, 
-                shortName: shortServiceName 
+            this.logger.info('Generated short service name', {
+                originalName: projectName,
+                shortName: shortServiceName
             });
 
-            // Step 6: Generate app.yaml based on application type
-            let appYaml: string;
-            if (hasBackend && backendConfig) {
-                // Full-stack application (frontend + backend)
-                this.logger.info('Generating full-stack app.yaml', { entryPoint: backendConfig.entryPoint });
-                appYaml = generateFullStackAppYaml(shortServiceName, backendConfig);
-            } else {
-                // Frontend-only application
-                this.logger.info('Generating static frontend app.yaml');
-                appYaml = generateStaticAppYaml(shortServiceName);
-            }
+            // Step 10: Always generate app.yaml with default API support
+            // This provides API routes by default, works for both frontend-only and full-stack apps
+            this.logger.info('Generating app.yaml with default API support');
+            const appYaml = generateDefaultAppYaml(shortServiceName, {
+                apiRoutes,
+                clientDirectory,
+            });
 
-            // Step 7: Write app.yaml to sandbox root
+            // Step 11: Write app.yaml to sandbox root
             await sandbox.writeFile(`${instanceId}/app.yaml`, appYaml);
 
-            // Step 8: Create .gcloudignore based on application type
-            let gcloudignore: string;
-            if (hasBackend && backendConfig) {
-                // Full-stack: Include backend files, exclude source but keep compiled
-                gcloudignore = `# Exclude everything
-*
-
-# Include dist/client directory (frontend)
-!/dist/
-!/dist/client/
-!/dist/client/**
-
-# Include backend entry point and necessary files
-!/${backendConfig.entryPoint || 'server.js'}
-!/package.json
-!/package-lock.json
-
-# Include app.yaml
-!/app.yaml
-
-# Explicitly exclude sensitive files and source
-.gcloud-key.json
-.env
-.env.local
-node_modules/
-src/
-.git/
-*.ts
-*.tsx
-*.jsx
-tsconfig.json
-vite.config.ts
-`;
-            } else {
-                // Frontend-only: Only include dist/client
-                gcloudignore = `# Exclude everything
-*
-
-# Include only the dist/client directory and app.yaml
-!/dist/
-!/dist/client/
-!/dist/client/**
-!/app.yaml
-
-# Explicitly exclude sensitive files
-.gcloud-key.json
-.env
-.env.local
-node_modules/
-src/
-.git/
-*.ts
-*.tsx
-*.jsx
-package.json
-package-lock.json
-tsconfig.json
-vite.config.ts
-`;
-            }
+            // Step 12: Always create .gcloudignore for full-stack deployment
+            // Includes dist/server.js and dist/client
+            this.logger.info('Creating .gcloudignore for full-stack deployment');
+            const gcloudignore = generateFullStackGcloudignore();
             await sandbox.writeFile(`${instanceId}/.gcloudignore`, gcloudignore);
-            this.logger.info('Created .gcloudignore', { hasBackend });
+            this.logger.info('Created .gcloudignore');
 
-            // Step 9: Authenticate gcloud with service account key
+            // Step 13: Authenticate gcloud with service account key
             // Write service account key to a temporary file
             const keyPath = `.gcloud-key.json`;
             const serviceAccountJson = Buffer.from(serviceAccountKey, 'base64').toString('utf8');
@@ -2250,7 +2211,7 @@ vite.config.ts
                 throw new Error(`Failed to authenticate gcloud: ${authResult.stderr}`);
             }
 
-            // Step 10: Deploy to App Engine using gcloud CLI
+            // Step 14: Deploy to App Engine using gcloud CLI
             this.logger.info('Deploying to App Engine via gcloud');
             const deployResult = await this.executeCommand(
                 instanceId,
@@ -2260,20 +2221,20 @@ vite.config.ts
                 throw new Error(`App Engine deployment failed: ${deployResult.stderr}`);
             }
 
-            // Step 11: Get deployment URL (use short service name)
+            // Step 15: Get deployment URL (use short service name)
             const deployedUrl = `https://${shortServiceName}-dot-${projectId}.appspot.com`;
             const versionId = `v${Date.now()}`;
 
             // Clean up service account key file
             await this.executeCommand(instanceId, `rm -f ${keyPath}`);
 
-            const deploymentType = hasBackend ? 'full-stack (frontend + backend)' : 'static frontend';
+            const deploymentType = 'full-stack (with default API support)';
+            
             this.logger.info('App Engine deployment successful', {
                 instanceId,
                 deployedUrl,
                 versionId,
                 deploymentType,
-                hasBackend,
             });
 
             return {
@@ -2722,4 +2683,5 @@ vite.config.ts
             };
         }
     }
+
 }
